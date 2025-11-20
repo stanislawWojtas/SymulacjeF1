@@ -5,7 +5,6 @@ use std::collections::HashMap;
 /// * `initials` - Driver initials, e.g. BOT
 /// * `name` - Driver name, e.g. Valtteri Bottas
 /// * `t_driver` - (s) Time loss per lap due to driver abilities
-/// * `t_teamorder` - (s) Team order time delta (negative or positive)
 /// * `vel_max` - (km/h) Maximum velocity during qualifying
 /// * `degr_pars_all` - Map containing the degradation parameters for all relevant tire compounds
 #[derive(Debug, Deserialize, Clone)]
@@ -13,9 +12,15 @@ pub struct DriverPars {
     pub initials: String,
     pub name: String,
     pub t_driver: f64,
-    pub t_teamorder: f64,
+    #[serde(default = "default_consistency")]
+    pub consistency: f64,
+    // Usunięto t_teamorder
     pub vel_max: f64,
     pub degr_pars_all: HashMap<String, DegrPars>,
+}
+
+fn default_consistency() -> f64 {
+    1.0
 }
 
 #[derive(Debug)]
@@ -23,7 +28,8 @@ pub struct Driver {
     pub initials: String,
     name: String,
     pub t_driver: f64,
-    t_teamorder: f64,
+    pub consistency: f64,
+    // Usunięto t_teamorder
     vel_max: f64,
     degr_pars_all: HashMap<String, DegrPars>,
 }
@@ -34,7 +40,8 @@ impl Driver {
             initials: driver_pars.initials.to_owned(),
             name: driver_pars.name.to_owned(),
             t_driver: driver_pars.t_driver,
-            t_teamorder: driver_pars.t_teamorder,
+            consistency: driver_pars.consistency,
+            // Usunięto t_teamorder
             vel_max: driver_pars.vel_max,
             degr_pars_all: driver_pars.degr_pars_all.to_owned(),
         }

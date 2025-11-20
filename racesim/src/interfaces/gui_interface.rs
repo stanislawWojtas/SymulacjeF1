@@ -15,6 +15,7 @@ pub struct CarState {
     pub driver_initials: String,
     pub color: RgbColor,
     pub race_prog: f64,
+    pub velocity: f64,
 }
 
 #[derive(Debug, Clone, Default)]

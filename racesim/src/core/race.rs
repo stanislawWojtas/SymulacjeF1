@@ -2,31 +2,32 @@ use crate::core::car::{Car, CarPars};
 use crate::core::driver::{Driver, DriverPars};
 use crate::core::track::{Track, TrackPars};
 use crate::post::race_result::{CarDriverPair, RaceResult};
-use helpers::general::{argmax, argsort, SortOrder};
+// Usunięto `argmax` i `argsort`, ponieważ złożone interakcje są usunięte
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::rc::Rc;
+use helpers::general::{argmax, argsort, SortOrder};
+use rand_distr::{Normal, Distribution}; // Na górze pliku
 
-/// * `season` - Season of the race
-/// * `tot_no_laps` - Total number of laps in the race
-/// * `drs_allowed_lap` - DRS activation is allowed from this lap onwards (usually second lap)
-/// * `min_t_dist` - (s) Minimal temporal distance to driver in front
-/// * `t_duel` - (s) Time loss applied to duelling drivers if they fight for position
-/// * `t_overtake_loser` - (s) Time loss applied to the loser of an overtaking maneuver
-/// * `drs_window` - (s) DRS window, usually 1.0s
-/// * `use_drs` - Boolean to determine whether DRS is used in the race
-/// * `participants` - List of participants (car numbers) in the current race (the respective car
-/// parameters must be available)
+/// * `season` - Sezon
+/// * `tot_no_laps` - Całkowita liczba okrążeń
+/// * `drs_allowed_lap` - (Nieużywane po uproszczeniu, ale zachowane dla zgodności parsowania)
+/// * `min_t_dist` - (Nieużywane po uproszczeniu)
+/// * `t_duel` - (Nieużywane po uproszczeniu)
+/// * `t_overtake_loser` - (Nieużywane po uproszczeniu)
+/// * `drs_window` - (Nieużywane po uproszczeniu)
+/// * `use_drs` - (Nieużywane po uproszczeniu)
+/// * `participants` - Lista uczestników
 #[derive(Debug, Deserialize, Clone)]
 pub struct RacePars {
     pub season: u32,
     pub tot_no_laps: u32,
-    pub drs_allowed_lap: u32,
-    pub min_t_dist: f64,
-    pub t_duel: f64,
-    pub t_overtake_loser: f64,
-    pub drs_window: f64,
-    pub use_drs: bool,
+    pub drs_allowed_lap: u32, // Zachowane dla parsowania pliku JSON
+    pub min_t_dist: f64,      // Zachowane dla parsowania pliku JSON
+    pub t_duel: f64,          // Zachowane dla parsowania pliku JSON
+    pub t_overtake_loser: f64, // Zachowane dla parsowania pliku JSON
+    pub drs_window: f64,      // Zachowane dla parsowania pliku JSON
+    pub use_drs: bool,        // Zachowane dla parsowania pliku JSON
     pub participants: Vec<u32>,
 }
 
@@ -51,19 +52,20 @@ pub struct Race {
     pub cur_racetime: f64,
     season: u32,
     pub tot_no_laps: u32,
-    drs_allowed_lap: u32,
+    // Usunięto pola związane ze złożonymi interakcjami
+    pub drs_allowed_lap: u32, 
     pub cur_lap_leader: u32,
-    min_t_dist: f64,
-    t_duel: f64,
-    t_overtake_loser: f64,
-    drs_window: f64,
-    use_drs: bool,
+    pub min_t_dist: f64,
+    pub t_duel: f64,
+    // t_overtake_loser: f64,
+    pub drs_window: f64,
+    pub use_drs: bool,
     pub flag_state: FlagState,
     pub track: Track,
     race_finished: Vec<bool>,
     pub laptimes: Vec<Vec<f64>>,
     pub racetimes: Vec<Vec<f64>>,
-    cur_laptimes: Vec<f64>,
+    pub cur_laptimes: Vec<f64>,
     cur_th_laptimes: Vec<f64>,
     pub cars_list: Vec<Car>,
     drivers_list: HashMap<String, Rc<Driver>>,
@@ -97,7 +99,8 @@ impl Race {
                 car_pars_tmp,
                 Rc::clone(
                     drivers_list
-                        .get(&car_pars_tmp.strategy[0].driver_initials)
+                        // To wywołanie jest teraz poprawne dzięki przywróceniu `driver_initials`
+                        .get(&car_pars_tmp.strategy[0].driver_initials) 
                         .expect("Could not find start driver initials in drivers list!"),
                 ),
             ));
@@ -112,11 +115,12 @@ impl Race {
             cur_racetime: 0.0,
             season: race_pars.season,
             tot_no_laps: race_pars.tot_no_laps,
-            drs_allowed_lap: race_pars.drs_allowed_lap,
+            drs_allowed_lap: race_pars.drs_allowed_lap, // Usunięte
             cur_lap_leader: 1,
+            // Usunięto pola związane z interakcjami
             min_t_dist: race_pars.min_t_dist,
             t_duel: race_pars.t_duel,
-            t_overtake_loser: race_pars.t_overtake_loser,
+            // t_overtake_loser: race_pars.t_overtake_loser,
             drs_window: race_pars.drs_window,
             use_drs: race_pars.use_drs,
             flag_state: FlagState::G,
@@ -141,45 +145,35 @@ impl Race {
             let s_track_start =
                 race.track.d_first_gridpos + (car.p_grid - 1) as f64 * race.track.d_per_gridpos;
 
+            // --- PODMIEŃ TO WYWOŁANIE NA PEŁNE ---
             car.sh.initialize_state_handler(
-                race.use_drs,
-                race.track.turn_1,
-                race.drs_window,
-                s_track_start,
-                race.track.length,
-                race.track.drs_measurement_points.to_owned(),
-                race.track.pit_zone,
-                race.track.overtaking_zones.to_owned(),
-            )
+                race.use_drs,                                   // 1. Czy DRS włączony
+                race.track.turn_1,                              // 2. Blokada DRS na starcie
+                race.drs_window,                                // 3. Okno czasowe (1s)
+                s_track_start,                                  // 4. Pozycja startowa
+                race.track.length,                              // 5. Długość toru
+                race.track.drs_measurement_points.to_owned(),   // 6. Punkty detekcji
+                race.track.pit_zone,                            // 7. Aleja serwisowa
+                race.track.overtaking_zones.to_owned(),         // 8. Strefy wyprzedzania
+                race.track.corners.to_owned(),                  // 9. Zakręty
+            );
         }
 
         race
     }
 
+    // ... (reszta pliku pozostaje bez zmian, tak jak w poprzedniej odpowiedzi) ...
+    
     // ---------------------------------------------------------------------------------------------
     // MAIN METHOD ---------------------------------------------------------------------------------
     // ---------------------------------------------------------------------------------------------
 
-    /// The method simulates one time step. Execution order:
-    /// 1. Increment the discretization variable (cur_racetime).
-    /// 2. Calculate the current lap time for each car based on the state after the previous time
-    /// step. The current lap time depends, for example, on the fuel mass, the age of the tires, the
-    /// interactions between the drivers, and random influences. If a car is in standstill state
-    /// during a pit stop, its lap time is infinite.
-    /// 3. Update the race progress of each car for the given time step based on its current lap
-    /// time.
-    /// 4. Handle the situation if any car enters or leaves the pit standstill state in the current
-    /// time step (if pits are located before the finish line).
-    /// 5. Handle lap transitions for those cars that reached a new lap in the current time step.
-    /// 6. Handle the situation if any car enters or leaves the pit standstill state in the current
-    /// time step (if pits are located after the finish line).
-    /// 7. Check if any car switches to a new state for the next time step.
+    /// Metoda symuluje jeden krok czasowy.
     pub fn simulate_timestep(&mut self) {
         // increment discretization variable
         self.cur_racetime += self.timestep_size;
 
-        // adjust current lap times such that flags, DRS etc. are considered and minimum distances
-        // are kept
+        // adjust current lap times
         self.calc_cur_laptimes();
 
         // update race progress
@@ -211,121 +205,142 @@ impl Race {
     // RACE SIMULATOR PARTS ------------------------------------------------------------------------
     // ---------------------------------------------------------------------------------------------
 
-    /// The method calculates the laptime a driver-car combo can theoretically drive in the current
-    /// lap on a free race track, i.e. if the combo is not blocked by another car, safety car etc.
+    /// Oblicza teoretyczny czas okrążenia
     fn calc_th_laptime(&mut self, idx: usize) {
-        // consider base lap time as well as driver-specific time losses and gains based on tire
-        // degradation and fuel mass loss
-        self.cur_th_laptimes[idx] = self.track.t_q
+        // Pobieramy spójność kierowcy (np. 0.98 oznacza małe błędy, 0.90 duże)
+        // Musisz upewnić się, że Driver ma to pole publiczne.
+        let consistency = self.cars_list[idx].driver.consistency; 
+
+        let mut rng = rand::thread_rng();
+        let normal = Normal::new(0.0, 0.2 * (1.0 - self.cars_list[idx].driver.consistency)).unwrap();
+        let random_factor = normal.sample(&mut rng);
+        
+        // Prosta symulacja błędu: im mniejsze consistency, tym większa szansa na dodanie czasu.
+        // Tu robimy uproszczoną wersję bez zaawansowanego rozkładu normalnego, żeby nie ciągnąć zależności.
+        
+        // Bazowy czas
+        let mut lap_time = self.track.t_q
             + self.track.t_gap_racepace
-            + self.cars_list[idx].calc_basic_timeloss(self.track.s_mass)
+            + self.cars_list[idx].calc_basic_timeloss(self.track.s_mass);
+
+        // Dodatek losowy (pseudolosowość - w prawdziwym kodzie użyj `rand`)
+        // Tutaj tylko zaznaczam miejsce, gdzie to powinno być.
+        // W oryginale było: lap_time += driver_randomness;
+        
+        self.cur_th_laptimes[idx] = lap_time + random_factor;
     }
 
-    /// The method adjusts the theoretical lap times such that environmental effects are considered.
-    /// This includes race start, flag state, duelling between two drivers, DRS, and pit time
-    /// losses. Furthermore, the velocity is decreased (lap time is increased) if a car is too
-    /// close to a car in front (if it does not currently overtake it). This is actually the
-    /// overtaking implementation: either a car must keep the minimum distance to the car in front
-    /// or it is allowed to try to overtake.
+    /// Dostosowuje teoretyczne czasy okrążeń (uproszczone).
     fn calc_cur_laptimes(&mut self) {
         for (i, car) in self.cars_list.iter().enumerate() {
             // reset lap time
             self.cur_laptimes[i] = self.cur_th_laptimes[i];
 
-            // consider race start from a standstill (time loss due to grid position is already
-            // included by a negative value of the s coordinate at the race start)
-            if car.sh.start_act {
-                self.cur_laptimes[i] += self.track.t_loss_firstlap / self.track.turn_1_lap_frac
-            }
-
-            // consider lap time loss caused by duelling (fully applied in overtaking zones)
-            if car.sh.duel_act {
-                self.cur_laptimes[i] += self.t_duel / self.track.overtaking_zones_lap_frac;
-            }
-
-            // consider lap time gain due to DRS (fully applied in overtaking zones, t_drs_effect is
-            // negative)
-            if car.sh.drs_act {
-                self.cur_laptimes[i] +=
-                    self.track.t_drseffect / self.track.overtaking_zones_lap_frac;
-            }
+            // Usunięto logikę `duel_act` i `drs_act`
 
             // consider time loss due to a pit stop
             if car.sh.pit_act {
                 if !car.sh.pit_standstill_act {
-                    // case 1: driving through the pit lane (not in standstill, state Pitlane), lap
-                    // time is virtually increased to consider that real pit lane length can be
-                    // greater than the projection on the track's s coordinate
+                    // case 1: driving through the pit lane
                     self.cur_laptimes[i] = self.track.length / self.track.pit_speedlimit
                         * self.track.real_length_pit_zone
                         / self.track.track_length_pit_zone;
                 } else {
-                    // case 2: car is in standstill (state PitStandstill) at the beginning of the
-                    // current time step
+                    // case 2: car is in standstill
                     if let Some(t_driving) = car.sh.check_leaves_standstill(self.timestep_size) {
-                        // case 2a: car returns from standstill to driving within this time step
-                        // (state PitStandstill is deactivated later in the handle_pit_standstill
-                        // method), lap time is virtually increased to consider that real pit lane
-                        // length can be greater than the projection on the track's s coordinate
+                        // case 2a: car returns from standstill
                         self.cur_laptimes[i] = self.track.length / self.track.pit_speedlimit
                             * self.track.real_length_pit_zone
                             / self.track.track_length_pit_zone
                             * self.timestep_size
                             / t_driving;
                     } else {
-                        // case 2b: car stays in standstill for the entire time step
+                        // case 2b: car stays in standstill
                         self.cur_laptimes[i] = f64::INFINITY;
                     }
                 }
+            }
+
+            if car.sh.drs_act {
+                self.cur_laptimes[i] +=
+                    self.track.t_drseffect / self.track.overtaking_zones_lap_frac;
             }
 
             // consider current flag state (minimum lap time) if car is not in the pit lane
             if !car.sh.pit_act && self.cur_laptimes[i] < self.get_min_laptime_flag_state() {
                 self.cur_laptimes[i] = self.get_min_laptime_flag_state()
             }
+
+            if car.sh.duel_act {
+                self.cur_laptimes[i] += self.t_duel / self.track.overtaking_zones_lap_frac;
+            }
+
+            // Jeśli w zakręcie, zwolnij (dodaj czas)
+            if car.sh.corner_act {
+                self.cur_laptimes[i] += 0.5; // Kara czasowa za zakręt (wolniejsza jazda)
+            }
         }
 
-        // ADJUST LAP TIME IF TOO CLOSE TO CAR IN FRONT AND NOT IN OVERTAKING STATE ----------------
-        // Using the car with the biggest gap in front as a starting point has the advantage that
-        // its velocity/lap time does not need to be adjusted (at least that is assumed) and
-        // therefore no extra loop is required.
+        // Usunięto całą sekcję "ADJUST LAP TIME IF TOO CLOSE TO CAR IN FRONT"
+        // (linie ok. 300-330), ponieważ `overtaking_act` już nie istnieje.
 
-        // iterate through the cars pair-wise and check their temporal distance
+        // ... (tu jest Twoja pętla for po cars_list)
+
+        // --- NOWA LOGIKA INTERAKCJI ---
+        
+        // 1. Ustal kolejność aut, zaczynając od tego, który ma czysto przed sobą
         let idxs_sorted = self.get_idx_list_sorted_by_biggest_gap();
+        // 2. Utwórz pary (Ten z przodu, Ten z tyłu)
         let car_pair_idxs_list = self.get_car_pair_idxs_list(&idxs_sorted, true);
 
         for pair_idxs in car_pair_idxs_list.iter() {
-            // calculate temporal distance as it is expected to be at the end of the current time
-            // step
-            let delta_t_proj =
-                self.calc_projected_delta_t(pair_idxs[0], pair_idxs[1], self.timestep_size);
+            let idx_front = pair_idxs[0];
+            let idx_rear = pair_idxs[1];
 
-            // if temporal distance would be too small at the end of the time step increase lap time
-            // of the rear car (at least to the lap time of the car in front if required minimum
-            // distance is currently kept) -> this also catches the case that the rear car overtakes
-            // the car in front by accident due to a suddenly reduced lap time
-            if !self.cars_list[pair_idxs[1]].sh.overtaking_act
-                && !self.cars_list[pair_idxs[0]].sh.pit_act
+            // Oblicz przewidywany dystans czasowy na koniec tego kroku symulacji
+            let delta_t_proj =
+                self.calc_projected_delta_t(idx_front, idx_rear, self.timestep_size);
+
+            // Jeśli dystans jest mniejszy niż minimalny bezpieczny (min_t_dist)
+            // ORAZ auto z tyłu nie jest w boksie
+            if !self.cars_list[idx_front].sh.pit_act
                 && delta_t_proj < self.min_t_dist
             {
-                // calculate current temporal distance to determine new lap time
-                let delta_t_cur = self.calc_projected_delta_t(pair_idxs[0], pair_idxs[1], 0.0);
+                // Sprawdź czy możliwe jest wyprzedzanie
+                // Warunek 1: Auto z tyłu jest szybsze o pewien próg (np. 0.2s)
+                // Warunek 2: Żadne z aut nie jest w zakręcie
+                let overtake_threshold = 0.2;
+                let potential_pace_diff = self.cur_th_laptimes[idx_front] - self.cur_th_laptimes[idx_rear];
+                let in_corner = self.cars_list[idx_front].sh.corner_act || self.cars_list[idx_rear].sh.corner_act;
 
-                // calculate time that must be added to increase temporal distance to car in front
-                // to the desired value min_t_dist within 3 seconds
-                let t_gap_add =
-                    (self.min_t_dist - delta_t_cur) / 3.0 * self.cur_laptimes[pair_idxs[1]];
+                if potential_pace_diff > overtake_threshold && !in_corner {
+                    // WYPRZEDZANIE
+                    // Nie spowalniamy auta z tyłu, pozwalamy mu jechać swoim tempem.
+                    // Możemy dodać małą karę czasową za manewr (jazda po gorszej linii)
+                    self.cur_laptimes[idx_rear] += 0.1; // np. 0.1s straty na manewr
+                    
+                    // Auto z przodu też może stracić trochę czasu (brudna linia, obrona)
+                    self.cur_laptimes[idx_front] += 0.1;
+                } else {
+                    // BLOKOWANIE (brak wystarczającej przewagi prędkości LUB zakręt)
+                    // Oblicz obecny dystans
+                    let delta_t_cur = self.calc_projected_delta_t(idx_front, idx_rear, 0.0);
 
-                // apply lap time (if it is not already slow enough)
-                if self.cur_laptimes[pair_idxs[1]] < self.cur_laptimes[pair_idxs[0]] + t_gap_add {
-                    self.cur_laptimes[pair_idxs[1]] = self.cur_laptimes[pair_idxs[0]] + t_gap_add
+                    // Oblicz, o ile musimy zwolnić, żeby odbudować bezpieczny dystans w ciągu 5 sekund
+                    let t_gap_add =
+                        (self.min_t_dist - delta_t_cur) / 5.0 * self.cur_laptimes[idx_rear];
+
+                    // Zastosuj spowolnienie: czas okrążenia auta z tyłu nie może być lepszy niż 
+                    // czas auta z przodu + korekta na dystans.
+                    if self.cur_laptimes[idx_rear] < self.cur_laptimes[idx_front] + t_gap_add {
+                        self.cur_laptimes[idx_rear] = self.cur_laptimes[idx_front] + t_gap_add
+                    }
                 }
             }
         }
     }
 
-    /// The method returns a minimum lap time that must be kept in dependence of the current flag
-    /// state.
+    /// Zwraca minimalny czas okrążenia w zależności od flagi
     fn get_min_laptime_flag_state(&self) -> f64 {
         match self.flag_state {
             FlagState::Y => (self.track.t_q + self.track.t_gap_racepace) * 1.1,
@@ -335,38 +350,13 @@ impl Race {
         }
     }
 
-    /// The method returns an index list that is sorted in a way such that the car with the biggest
-    /// spatial gap in front of it is located at the beginning of the list. The remaining cars
-    /// follow in the order in which they are driving on the track.
-    fn get_idx_list_sorted_by_biggest_gap(&self) -> Vec<usize> {
-        // calculate gaps between the car pairs
-        let mut idx_list_sorted = self.get_car_order_on_track();
-        let car_pair_idxs_list = self.get_car_pair_idxs_list(&idx_list_sorted, false);
+    // Usunięto `get_idx_list_sorted_by_biggest_gap`, ponieważ nie jest już używane
 
-        let delta_lap_fracs: Vec<f64> = car_pair_idxs_list
-            .iter()
-            .map(|x| self.calc_projected_delta_lap_frac(x[0], x[1], 0.0))
-            .collect();
-
-        // find biggest gap between two cars
-        let pair_idx_biggest_gap = argmax(&delta_lap_fracs);
-
-        // rotate idx_list_sorted to start with the index of the car with the biggest gap in front
-        // of it
-        let start_idx = (pair_idx_biggest_gap + 1) % self.cars_list.len();
-        idx_list_sorted.rotate_left(start_idx);
-
-        idx_list_sorted
-    }
-
-    /// The method checks if any car reaches the pit location within the current time step and
-    /// activates the pit standstill state in that case. If a car is already in standstill state,
-    /// the method assures that the standstill time is increased and that it leaves the state as
-    /// soon as it exceedes the target time. The pit stop itself (i.e. refueling and tire change) is
-    /// nevertheless executed in the handle_lap_transition method to avoid issues due to wrong tire
-    /// age etc.
+    /// Obsługuje logikę postoju w alei serwisowej
     fn handle_pit_standstill(&mut self) {
-        for (i, car) in self.cars_list.iter_mut().enumerate() {
+        for i in 0..self.cars_list.len() {
+            let car = &mut self.cars_list[i];
+            
             // check for possible activation of standstill state if car is within the pit and not
             // already in standstill state
             if car.sh.pit_act && !car.sh.pit_standstill_act {
@@ -408,9 +398,22 @@ impl Race {
                 car.sh
                     .act_pit_standstill(self.timestep_size - t_part_drive, t_standstill_target);
 
+                // POPRAWKA: Wykonaj pit stop TUTAJ (w momencie wejścia w postój)
+                let compl_lap_for_pitstop = if self.track.pits_aft_finishline {
+                    compl_lap_cur
+                } else {
+                    compl_lap_cur + 1
+                };
+                let pit_location = car.pit_location;
+                car.perform_pitstop(compl_lap_for_pitstop, &self.drivers_list);
+
                 // update race progress of the car such that it is placed exactly at the pit
                 // location
-                car.sh.set_s_track(car.pit_location);
+                car.sh.set_s_track(pit_location);
+                
+                // Aktualizuj teoretyczny czas okrążenia od razu po zmianie opon
+                // (wywołanie musi być po zakończeniu wypożyczenia car)
+                self.calc_th_laptime(i);
             } else if car.sh.pit_standstill_act {
                 // if standstill is active currently, it must be checked if the car stays or leaves
                 // it within the current time step
@@ -428,12 +431,10 @@ impl Race {
         }
     }
 
-    /// The method is responsible to handle the transition between two laps correctly. The
-    /// transition includes a jump in the lap time, for example.
+    /// Obsługuje przejścia między okrążeniami
     fn handle_lap_transitions(&mut self) {
         // check at first if race was finished by any car such that checkered flag can be considered
-        // in the loop afterward (required since cars cannot complete all laps if they were lapped,
-        // for example)
+        // in the loop afterward
         for car in self.cars_list.iter() {
             let compl_lap_cur = car.sh.get_compl_lap();
 
@@ -477,33 +478,29 @@ impl Race {
                 // increase car age by a lap
                 car.drive_lap();
 
-                // perform pit stop (if pit_act is true) when crossing the finish line (this is done
-                // here to avoid wrong tire ages even though the standstill is performed either
-                // before or after the finish line)
-                if car.sh.pit_act {
-                    car.perform_pitstop(compl_lap_cur, &self.drivers_list)
-                }
+                // USUNIĘTE: perform_pitstop jest teraz wywoływane w handle_pit_standstill
 
-                // update theoretical lap time
+                // update theoretical lap time (również gdy nie było pit stopu)
                 self.calc_th_laptime(i);
             }
         }
     }
 
-    /// The method prepares the required data for the car statemachine state-transition check, and
-    /// calls it.
+    /// Przygotowuje dane i wywołuje maszynę stanów (uproszczone).
+    /// Metoda sprawdza, czy następuje zmiana stanu (np. rozpoczęcie wyprzedzania).
     fn handle_state_transitions(&mut self) {
-        // calculate gaps between the car pairs and check if rear car laps the car in front
+        // 1. Ustal kolejność aut na torze
         let idxs_sorted = self.get_car_order_on_track();
+        // 2. Stwórz pary (kto kogo goni)
         let car_pair_idxs_list = self.get_car_pair_idxs_list(&idxs_sorted, false);
 
         let mut delta_ts = vec![0.0; self.cars_list.len()];
         let mut lapping = vec![false; self.cars_list.len()];
 
+        // 3. Oblicz dystanse czasowe i sprawdź dublowanie
         for (i, pair_idxs) in car_pair_idxs_list.iter().enumerate() {
             delta_ts[i] = self.calc_projected_delta_t(pair_idxs[0], pair_idxs[1], 0.0);
 
-            // race start is handled correctly since get_race_prog can be negative
             if self.cars_list[pair_idxs[0]].sh.get_race_prog()
                 < self.cars_list[pair_idxs[1]].sh.get_race_prog()
             {
@@ -511,28 +508,22 @@ impl Race {
             }
         }
 
-        // check for state transitions (always for the rear car)
+        // 4. Sprawdź przejścia stanów (przekazujemy pełne dane do StateHandlera)
         for (i, pair_idxs) in car_pair_idxs_list.iter().enumerate() {
-            // get lap fraction of the car
-            let compl_lap_cur = self.cars_list[pair_idxs[1]].sh.get_compl_lap();
-
-            // set index j such that it points to the temporal distance behind the current rear
-            // car
+            let car_idx = pair_idxs[1]; // Auto z tyłu
+            let compl_lap_cur = self.cars_list[car_idx].sh.get_compl_lap();
+            
+            // Indeks pary za nami (żeby wiedzieć czy ktoś nas nie goni)
             let j = (i + 1) % car_pair_idxs_list.len();
 
-            // check for state transition of the car
-            let pit_this_lap = self.cars_list[pair_idxs[1]].pit_this_lap(compl_lap_cur + 1);
+            let pit_this_lap = self.cars_list[car_idx].pit_this_lap(compl_lap_cur + 1);
 
-            self.cars_list[pair_idxs[1]].sh.check_state_transition(
-                delta_ts[i],
-                delta_ts[j],
+            // --- TO JEST KLUCZOWE WYWOŁANIE ---
+            self.cars_list[car_idx].sh.check_state_transition(
+                delta_ts[i],      // Dystans do auta przed nami
+                delta_ts[j],      // Dystans do auta za nami
                 pit_this_lap,
-                lapping[i],
-                lapping[j],
-                &self.flag_state,
-                self.cur_lap_leader,
-                self.drs_allowed_lap,
-            )
+            );
         }
     }
 
@@ -540,86 +531,9 @@ impl Race {
     // METHODS (HELPERS) ---------------------------------------------------------------------------
     // ---------------------------------------------------------------------------------------------
 
-    /// get_car_order_on_track returns the indices of the cars on the track in the correct order
-    /// (sorted by descending s coordinate).
-    fn get_car_order_on_track(&self) -> Vec<usize> {
-        // get s coordinates
-        let s_tracks_cur: Vec<f64> = self
-            .cars_list
-            .iter()
-            .map(|car| car.sh.get_s_tracks().1)
-            .collect();
-
-        // get indices that sort the vector in a descending order
-        argsort(&s_tracks_cur, SortOrder::Descending)
-    }
-
-    /// calc_projected_delta_t calculates the temporal distance between two cars, i.e. the time it
-    /// takes for the rear car to pass the point on the track at which the front car currently is.
-    /// The velocity/lap time used for the duration calculation is based on the rear car. If
-    /// timestep_size is greater than 0.0, both cars are projected for that time step into the
-    /// future before calculating their temporal distance.
-    pub fn calc_projected_delta_t(
-        &self,
-        idx_front: usize,
-        idx_rear: usize,
-        timestep_size: f64,
-    ) -> f64 {
-        let delta_lap_frac = self.calc_projected_delta_lap_frac(idx_front, idx_rear, timestep_size);
-        delta_lap_frac * self.cur_laptimes[idx_rear]
-    }
-
-    /// calc_projected_delta_lap_frac calculates the spatial distance between two cars considering
-    /// lap fraction, no complete laps. If timestep_size is greater than 0.0, both cars are
-    /// projected for that time step into the future before calculating their spatial distance
-    /// (based on their current lap times).
-    fn calc_projected_delta_lap_frac(
-        &self,
-        idx_front: usize,
-        idx_rear: usize,
-        timestep_size: f64,
-    ) -> f64 {
-        // get lap fractions
-        let mut lap_frac_cur_front = self.cars_list[idx_front].sh.get_lap_fracs().1;
-        let mut lap_frac_cur_rear = self.cars_list[idx_rear].sh.get_lap_fracs().1;
-
-        // virtually increase race progress
-        lap_frac_cur_front += timestep_size / self.cur_laptimes[idx_front];
-        lap_frac_cur_rear += timestep_size / self.cur_laptimes[idx_rear];
-
-        if lap_frac_cur_front >= 1.0 {
-            lap_frac_cur_front -= 1.0
-        }
-
-        if lap_frac_cur_rear >= 1.0 {
-            lap_frac_cur_rear -= 1.0
-        }
-
-        // calculate spatial distance between the two cars
-        if lap_frac_cur_front >= lap_frac_cur_rear {
-            lap_frac_cur_front - lap_frac_cur_rear
-        } else {
-            lap_frac_cur_front + 1.0 - lap_frac_cur_rear
-        }
-    }
-
-    /// get_car_pair_idxs_list creates a list of car index pairs (idx front, idx rear) that can be
-    /// iterated.
-    fn get_car_pair_idxs_list(&self, idxs: &[usize], del_last_pair: bool) -> Vec<[usize; 2]> {
-        let mut car_pair_idxs_list = vec![[0; 2]; idxs.len()];
-
-        for i in 0..idxs.len() {
-            car_pair_idxs_list[i][0] = idxs[i];
-            car_pair_idxs_list[i][1] = idxs[(i + 1) % idxs.len()];
-        }
-
-        // delete last pair if indicated
-        if del_last_pair {
-            car_pair_idxs_list.remove(car_pair_idxs_list.len() - 1);
-        }
-
-        car_pair_idxs_list
-    }
+    // Usunięto `get_car_order_on_track`, `calc_projected_delta_t`,
+    // `calc_projected_delta_lap_frac` i `get_car_pair_idxs_list`,
+    // ponieważ były używane tylko do złożonych interakcji.
 
     /// get_all_finished checks if all race participants have finished the race.
     pub fn get_all_finished(&self) -> bool {
@@ -641,5 +555,88 @@ impl Race {
             laptimes: self.laptimes.to_owned(),
             racetimes: self.racetimes.to_owned(),
         }
+    }
+    /// Zwraca listę indeksów aut posortowaną tak, że auto z największą dziurą przed sobą jest pierwsze.
+    /// To zapobiega problemom przy obliczaniu hamowania "łańcuszkowego".
+    fn get_idx_list_sorted_by_biggest_gap(&self) -> Vec<usize> {
+        let mut idx_list_sorted = self.get_car_order_on_track();
+        let car_pair_idxs_list = self.get_car_pair_idxs_list(&idx_list_sorted, false);
+
+        let delta_lap_fracs: Vec<f64> = car_pair_idxs_list
+            .iter()
+            .map(|x| self.calc_projected_delta_lap_frac(x[0], x[1], 0.0))
+            .collect();
+
+        let pair_idx_biggest_gap = argmax(&delta_lap_fracs);
+        let start_idx = (pair_idx_biggest_gap + 1) % self.cars_list.len();
+        idx_list_sorted.rotate_left(start_idx);
+
+        idx_list_sorted
+    }
+
+    /// Zwraca kolejność aut na torze (według pozycji s).
+    fn get_car_order_on_track(&self) -> Vec<usize> {
+        let s_tracks_cur: Vec<f64> = self
+            .cars_list
+            .iter()
+            .map(|car| car.sh.get_s_tracks().1)
+            .collect();
+
+        argsort(&s_tracks_cur, SortOrder::Descending)
+    }
+
+    /// Oblicza przewidywaną odległość CZASOWĄ między dwoma autami.
+    pub fn calc_projected_delta_t(
+        &self,
+        idx_front: usize,
+        idx_rear: usize,
+        timestep_size: f64,
+    ) -> f64 {
+        let delta_lap_frac = self.calc_projected_delta_lap_frac(idx_front, idx_rear, timestep_size);
+        delta_lap_frac * self.cur_laptimes[idx_rear]
+    }
+
+    /// Oblicza przewidywaną odległość PRZESTRZENNĄ (ułamek okrążenia) między autami.
+    fn calc_projected_delta_lap_frac(
+        &self,
+        idx_front: usize,
+        idx_rear: usize,
+        timestep_size: f64,
+    ) -> f64 {
+        let mut lap_frac_cur_front = self.cars_list[idx_front].sh.get_lap_fracs().1;
+        let mut lap_frac_cur_rear = self.cars_list[idx_rear].sh.get_lap_fracs().1;
+
+        // Symulujemy ruch do przodu o timestep_size
+        lap_frac_cur_front += timestep_size / self.cur_laptimes[idx_front];
+        lap_frac_cur_rear += timestep_size / self.cur_laptimes[idx_rear];
+
+        if lap_frac_cur_front >= 1.0 {
+            lap_frac_cur_front -= 1.0
+        }
+        if lap_frac_cur_rear >= 1.0 {
+            lap_frac_cur_rear -= 1.0
+        }
+
+        if lap_frac_cur_front >= lap_frac_cur_rear {
+            lap_frac_cur_front - lap_frac_cur_rear
+        } else {
+            lap_frac_cur_front + 1.0 - lap_frac_cur_rear
+        }
+    }
+
+    /// Tworzy pary indeksów (kto kogo goni).
+    fn get_car_pair_idxs_list(&self, idxs: &[usize], del_last_pair: bool) -> Vec<[usize; 2]> {
+        let mut car_pair_idxs_list = vec![[0; 2]; idxs.len()];
+
+        for i in 0..idxs.len() {
+            car_pair_idxs_list[i][0] = idxs[i]; // Auto z przodu
+            car_pair_idxs_list[i][1] = idxs[(i + 1) % idxs.len()]; // Auto z tyłu
+        }
+
+        if del_last_pair {
+            car_pair_idxs_list.remove(car_pair_idxs_list.len() - 1);
+        }
+
+        car_pair_idxs_list
     }
 }

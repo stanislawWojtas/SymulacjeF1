@@ -61,6 +61,7 @@ impl RacePlot {
             track_pars.drs_measurement_points.to_owned(),
             track_pars.pit_zone,
             track_pars.overtaking_zones.to_owned(),
+            track_pars.corners.to_owned(),
         )?;
 
         // get centerline from track (saved separately such that this must not be repeated in each
@@ -94,6 +95,35 @@ impl RacePlot {
         // get transformation from x/y to pixels in the window (y axis must be inverted)
         let [x_min, x_max, y_min, y_max] = self.track.get_axes_expansion(50.0);
 
+        // Calculate aspect ratios to preserve geometry
+        let track_width = (x_max - x_min).abs() as f32;
+        let track_height = (y_max - y_min).abs() as f32;
+        let track_aspect = if track_height != 0.0 { track_width / track_height } else { 1.0 };
+
+        let screen_width = response.rect.width();
+        let screen_height = response.rect.height();
+        let screen_aspect = screen_width / screen_height;
+
+        let mut dest_rect = response.rect;
+
+        if screen_aspect > track_aspect {
+            // Screen is wider -> fit height
+            let new_width = screen_height * track_aspect;
+            let offset_x = (screen_width - new_width) / 2.0;
+            dest_rect = egui::Rect::from_min_size(
+                egui::Pos2::new(response.rect.min.x + offset_x, response.rect.min.y),
+                egui::Vec2::new(new_width, screen_height)
+            );
+        } else {
+            // Screen is taller -> fit width
+            let new_height = screen_width / track_aspect;
+            let offset_y = (screen_height - new_height) / 2.0;
+            dest_rect = egui::Rect::from_min_size(
+                egui::Pos2::new(response.rect.min.x, response.rect.min.y + offset_y),
+                egui::Vec2::new(screen_width, new_height)
+            );
+        }
+
         let to_screen = egui::emath::RectTransform::from_to(
             egui::emath::Rect::from_min_max(
                 egui::Pos2 {
@@ -105,7 +135,7 @@ impl RacePlot {
                     y: y_min as f32,
                 },
             ),
-            response.rect,
+            dest_rect,
         );
 
         // create vector for drawn shapes
@@ -138,7 +168,8 @@ impl RacePlot {
                 egui::Color32::from_rgb(255, 128, 0)
             } else {
                 // overtaking zone -> blue
-                egui::Color32::from_rgb(0, 128, 255)
+                //egui::Color32::from_rgb(0, 128, 255)
+                continue; // temporarily disable overtaking zones drawing
             };
 
             shapes.push(egui::Shape::line(
@@ -147,6 +178,28 @@ impl RacePlot {
             ));
         }
 
+        // add corner zones
+        let corner_zones = self.track.get_corner_zones();
+        for zone in corner_zones.iter() {
+            let tmp_centerline: Vec<egui::Pos2> = zone
+                .centerline
+                .iter()
+                .map(|coords| egui::Pos2 {
+                    x: coords.x as f32,
+                    y: coords.y as f32,
+                })
+                .collect();
+            
+            // corners -> blue
+            let tmp_color = egui::Color32::from_rgb(0, 128, 255);
+
+            shapes.push(egui::Shape::line(
+                tmp_centerline.iter().map(|&x| to_screen * x).collect(),
+                egui::Stroke::new(7.0, tmp_color),
+            ));
+        }
+
+        /*
         // add track's sector boundaries and DRS measurement points
         let mut tmp_dists = vec![0.0, self.track.s12, self.track.s23];
         let mut tmp_texts = vec![String::from("SF"), String::from("S12"), String::from("S23")];
@@ -202,6 +255,7 @@ impl RacePlot {
                 egui::Color32::WHITE,
             ));
         }
+        */
 
         // CARS DRAWING ----------------------------------------------------------------------------
         // calculate current car coordinates and prepare the GUI car states for drawing
@@ -284,13 +338,19 @@ impl RacePlot {
         let cur_lap_leader = max(&race_progs).trunc() as u32 + 1;
         let mut gen_info_text = format!("Lap: {}/{}\n", cur_lap_leader, self.race_info.tot_no_laps);
 
+        // Add velocities
+        gen_info_text.push_str("\nVelocities:\n");
+        for car_state in self.racesim_interface.race_state.car_states.iter() {
+             writeln!(&mut gen_info_text, "{} ({}): {:.1} km/h", car_state.car_no, car_state.driver_initials, car_state.velocity * 3.6).unwrap();
+        }
+
         // add flag state
-        writeln!(
-            &mut gen_info_text,
-            "Flag state: {:?}",
-            self.racesim_interface.race_state.flag_state
-        )
-        .unwrap();
+        // writeln!(
+        //     &mut gen_info_text,
+        //     "Flag state: {:?}",
+        //     self.racesim_interface.race_state.flag_state
+        // )
+        // .unwrap();
 
         // calculate current UI update duration, append it to the buffer, and set update time
         self.prev_update_durations
@@ -298,12 +358,12 @@ impl RacePlot {
         self.prev_update = Instant::now();
 
         // add update frequency
-        write!(
-            &mut gen_info_text,
-            "GUI update frequency: {:.0} Hz",
-            1000.0 / self.prev_update_durations.get_avg().unwrap()
-        )
-        .unwrap();
+        // write!(
+        //     &mut gen_info_text,
+        //     "GUI update frequency: {:.0} Hz",
+        //     1000.0 / self.prev_update_durations.get_avg().unwrap()
+        // )
+        // .unwrap();
 
         // show general informations text in the GUI
         shapes.push(egui::Shape::text(
@@ -334,7 +394,10 @@ impl epi::App for RacePlot {
 
         // update UI content
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::Frame::dark_canvas(ui.style()).show(ui, |ui| {
+            let mut frame = egui::Frame::dark_canvas(ui.style());
+            // Ustawienie zielonego tła (ciemna zieleń dla lepszego kontrastu)
+            frame.fill = egui::Color32::from_rgb(20, 80, 20); 
+            frame.show(ui, |ui| {
                 self.set_ui_content(ui);
             });
         });

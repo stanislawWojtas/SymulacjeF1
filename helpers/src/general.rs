@@ -15,18 +15,18 @@ impl fmt::Display for InputValueError {
 impl Error for InputValueError {}
 
 /// argmax returns the index of the maximum value in the array x.
-pub fn argmax<T: std::cmp::PartialOrd>(x: &[T]) -> usize {
-    let (max_idx, _max_val) =
-        x.iter()
-            .enumerate()
-            .fold((0, &x[0]), |(idx_max, val_max), (idx, val)| {
-                if val_max > val {
-                    (idx_max, val_max)
-                } else {
-                    (idx, val)
-                }
-            });
-    max_idx
+pub fn argmax<T: std::cmp::PartialOrd + std::marker::Copy>(x: &[T]) -> usize {
+    let mut idx_max = 0;
+    let mut val_max = x[0];
+
+    for (i, &val) in x.iter().enumerate().skip(1) {
+        if val > val_max {
+            val_max = val;
+            idx_max = i;
+        }
+    }
+
+    idx_max
 }
 
 /// max returns the maximum value in the array x.
@@ -44,21 +44,20 @@ pub fn max<T: std::cmp::PartialOrd + std::marker::Copy>(x: &[T]) -> T {
     max_val
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum SortOrder {
     Ascending,
     Descending,
 }
 
-/// argsort returns the indices that sort the array x (unstable sort).
+/// argsort returns the indices that would sort an array.
 pub fn argsort<T: std::cmp::PartialOrd>(x: &[T], order: SortOrder) -> Vec<usize> {
-    let mut idxs: Vec<usize> = (0..x.len()).collect();
-
+    let mut indices: Vec<usize> = (0..x.len()).collect();
     match order {
-        SortOrder::Ascending => idxs.sort_unstable_by(|&a, &b| x[a].partial_cmp(&x[b]).unwrap()),
-        SortOrder::Descending => idxs.sort_unstable_by(|&a, &b| x[b].partial_cmp(&x[a]).unwrap()),
-    };
-
-    idxs
+        SortOrder::Ascending => indices.sort_by(|&a, &b| x[a].partial_cmp(&x[b]).unwrap()),
+        SortOrder::Descending => indices.sort_by(|&a, &b| x[b].partial_cmp(&x[a]).unwrap()),
+    }
+    indices
 }
 
 /// lin_interp returns the linearly interpolated value at x for given discrete data points xp, fp.

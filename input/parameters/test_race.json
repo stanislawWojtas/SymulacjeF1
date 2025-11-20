@@ -1,0 +1,132 @@
+{
+  "race_pars": {
+    "season": 2024,
+    "tot_no_laps": 5,
+    "drs_allowed_lap": 2,
+    "min_t_dist": 0.5,
+    "t_duel": 0.1,
+    "t_overtake_loser": 0.2,
+    "drs_window": 1.0,
+    "use_drs": true,
+    "participants": [44, 33]
+  },
+  "track_pars": {
+    "name": "Monza",
+    "length": 5793.0,
+    "t_q": 80.0,
+    "t_loss_firstlap": 4.0,
+    "pit_speedlimit": 22.2,
+    "t_gap_racepace": 3.0,
+    "s_mass": 0.035,
+    "t_drseffect": -0.5,
+    "turn_1": 300.0,
+    "d_first_gridpos": 100.0,
+    "d_per_gridpos": 8.0,
+    "real_length_pit_zone": 320.0,
+    "s12": 2000.0,
+    "s23": 4000.0,
+    "pit_zone": [5600.0, 100.0],
+    "drs_measurement_points": [2000.0, 4000.0],
+    "overtaking_zones": [[2000.0, 2500.0], [
+		4000.0, 4500.0]],
+    "corners": [[900.0, 1020.0], [2100.0, 2220.0], [2450.0, 2650.0], [2820.0, 2940.0], [3920.0, 4010.0], [4100.0, 4190.0], [5100.0, 5400.0]],
+    "pits_aft_finishline": true
+  },
+  "driver_pars_all": {
+    "HAM": {
+      "initials": "HAM",
+      "name": "Lewis Hamilton",
+      "t_driver": 0.5,
+      "vel_max": 330.0,
+      "degr_pars_all": {
+        "SOFT": {
+          "degr_model": "lin",
+          "k_0": 0.1,
+          "k_1_lin": 0.05
+        },
+        "MEDIUM": {
+          "degr_model": "lin",
+          "k_0": 0.08,
+          "k_1_lin": 0.04
+        },
+        "HARD": {
+          "degr_model": "lin",
+          "k_0": 0.06,
+          "k_1_lin": 0.03
+        }
+      }
+    },
+    "VER": {
+      "initials": "VER",
+      "name": "Max Verstappen",
+      "t_driver": 0.0,
+      "vel_max": 335.0,
+      "degr_pars_all": {
+        "SOFT": {
+          "degr_model": "lin",
+          "k_0": 0.1,
+          "k_1_lin": 0.05
+        },
+        "MEDIUM": {
+          "degr_model": "lin",
+          "k_0": 0.08,
+          "k_1_lin": 0.04
+        },
+        "HARD": {
+          "degr_model": "lin",
+          "k_0": 0.06,
+          "k_1_lin": 0.03
+        }
+      }
+    }
+  },
+  "car_pars_all": {
+    "44": {
+      "car_no": 44,
+      "color": "#FF0000",
+      "t_car": 0.0,
+      "m_fuel": 10.0,
+      "b_fuel_per_lap": 1.5,
+      "t_pit_refuel_per_kg": 0.1,
+      "t_pit_tirechange": 2.5,
+      "pit_location": 140.0,
+      "strategy": [
+        {
+          "inlap": 0,
+          "tire_start_age": 0,
+          "compound": "SOFT",
+          "driver_initials": "HAM",
+          "refuel_mass": 0.0
+        },
+        {
+          "inlap": 3,
+          "tire_start_age": 0,
+          "compound": "MEDIUM",
+          "driver_initials": "HAM",
+          "refuel_mass": 5.0
+        }
+      ],
+      "p_grid": 10
+    },
+    "33": {
+      "car_no": 33,
+      "color": "#FFFF00",
+      "t_car": 0.0,
+      "m_fuel": 10.0,
+      "b_fuel_per_lap": 1.5,
+      "t_pit_refuel_per_kg": 0.1,
+      "t_pit_tirechange": 2.5,
+      "pit_location": 140.0,
+      "strategy": [
+        {
+          "inlap": 0,
+          "tire_start_age": 0,
+          "compound": "HARD",
+          "driver_initials": "VER",
+          "refuel_mass": 0.0
+        }
+      ],
+      "p_grid": 1
+    }
+  }
+}

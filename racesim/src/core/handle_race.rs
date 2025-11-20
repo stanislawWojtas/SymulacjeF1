@@ -64,12 +64,20 @@ pub fn handle_race(
                     flag_state: race.flag_state.to_owned(),
                 };
 
-                for car in race.cars_list.iter() {
+                for (i, car) in race.cars_list.iter().enumerate() {
                     // convert hex color to a rgb color
                     let tmp_color = car
                         .color
                         .parse::<css_color_parser::Color>()
                         .context("Could not parse hex color!")?;
+
+                    let velocity = if car.sh.pit_standstill_act {
+                        0.0
+                    } else if car.sh.pit_act {
+                        race.track.pit_speedlimit
+                    } else {
+                        race.track.length / race.cur_laptimes[i]
+                    };
 
                     race_state.car_states.push(CarState {
                         car_no: car.car_no,
@@ -80,6 +88,7 @@ pub fn handle_race(
                             b: tmp_color.b,
                         },
                         race_prog: car.sh.get_race_prog(),
+                        velocity,
                     });
                 }
 

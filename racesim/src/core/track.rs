@@ -42,6 +42,8 @@ pub struct TrackPars {
     pub pit_zone: [f64; 2],
     pub pits_aft_finishline: bool,
     pub overtaking_zones: Vec<[f64; 2]>,
+    #[serde(default)]
+    pub corners: Vec<[f64; 2]>,
 }
 
 #[derive(Debug)]
@@ -67,6 +69,7 @@ pub struct Track {
     pub pits_aft_finishline: bool,
     pub overtaking_zones: Vec<[f64; 2]>,
     pub overtaking_zones_lap_frac: f64,
+    pub corners: Vec<[f64; 2]>,
 }
 
 impl Track {
@@ -117,6 +120,7 @@ impl Track {
             pits_aft_finishline: track_pars.pits_aft_finishline,
             pit_zone: track_pars.pit_zone,
             overtaking_zones: track_pars.overtaking_zones.to_owned(),
+            corners: track_pars.corners.to_owned(),
         }
     }
 

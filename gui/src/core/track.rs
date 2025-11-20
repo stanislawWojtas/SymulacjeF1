@@ -9,6 +9,7 @@ use std::path::Path;
 pub enum ZoneType {
     PitZone,
     OvertakingZone,
+    Corner,
 }
 
 #[derive(Debug)]
@@ -39,6 +40,7 @@ pub struct Track {
     pub drs_measurement_points: Vec<f64>,
     pub pit_zone: [f64; 2],
     pub overtaking_zones: Vec<[f64; 2]>,
+    pub corners: Vec<[f64; 2]>,
     pub clockwise: bool,
 }
 
@@ -51,6 +53,7 @@ impl Track {
         drs_measurement_points: Vec<f64>,
         pit_zone: [f64; 2],
         overtaking_zones: Vec<[f64; 2]>,
+        corners: Vec<[f64; 2]>,
     ) -> anyhow::Result<Track> {
         // check input
         if s12 <= 0.0 || track_length <= s12 {
@@ -157,11 +160,12 @@ impl Track {
             drs_measurement_points,
             pit_zone,
             overtaking_zones,
+            corners,
             clockwise,
         })
     }
 
-    pub fn get_axes_expansion(&self, padding_size: f64) -> [f64; 4] {
+    pub fn get_axes_expansion(&self, border: f64) -> [f64; 4] {
         // determine min and max x and y values
         let (mut x_min, mut x_max, mut y_min, mut y_max) = self.track_cl.iter().fold(
             (
@@ -197,10 +201,10 @@ impl Track {
         );
 
         // apply padding
-        x_min -= padding_size;
-        x_max += padding_size;
-        y_min -= padding_size;
-        y_max += padding_size;
+        x_min -= border;
+        x_max += border;
+        y_min -= border;
+        y_max += border;
 
         // update min and max values such that its a square shape
         let width = x_max - x_min;
@@ -342,5 +346,18 @@ impl Track {
             .sub(&self.track_cl[idx - 1].coords.as_vector2d());
 
         tan_vec.normalized().normal_vector()
+    }
+
+    pub fn get_corner_zones(&self) -> Vec<Zone> {
+        let mut zones: Vec<Zone> = Vec::new();
+
+        for corner in self.corners.iter() {
+            zones.push(Zone {
+                zone_type: ZoneType::Corner,
+                centerline: self.get_zone_centerline(corner),
+            })
+        }
+
+        zones
     }
 }
