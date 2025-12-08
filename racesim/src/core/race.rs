@@ -57,7 +57,7 @@ pub struct Race {
     pub cur_lap_leader: u32,
     pub min_t_dist: f64,
     pub t_duel: f64,
-    // t_overtake_loser: f64,
+    pub t_overtake_loser: f64,
     pub drs_window: f64,
     pub use_drs: bool,
     pub flag_state: FlagState,
@@ -120,7 +120,7 @@ impl Race {
             // Usunięto pola związane z interakcjami
             min_t_dist: race_pars.min_t_dist,
             t_duel: race_pars.t_duel,
-            // t_overtake_loser: race_pars.t_overtake_loser,
+            t_overtake_loser: race_pars.t_overtake_loser,
             drs_window: race_pars.drs_window,
             use_drs: race_pars.use_drs,
             flag_state: FlagState::G,
@@ -176,6 +176,9 @@ impl Race {
         // adjust current lap times
         self.calc_cur_laptimes();
 
+        // handle state transitions
+        self.handle_state_transitions();
+
         // update race progress
         for (i, car) in self.cars_list.iter_mut().enumerate() {
             car.sh
@@ -198,7 +201,7 @@ impl Race {
         }
 
         // handle state transitions
-        self.handle_state_transitions();
+        // self.handle_state_transitions();
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -320,7 +323,7 @@ impl Race {
                     self.cur_laptimes[idx_rear] += 0.1; // np. 0.1s straty na manewr
                     
                     // Auto z przodu też może stracić trochę czasu (brudna linia, obrona)
-                    self.cur_laptimes[idx_front] += 0.1;
+                    self.cur_laptimes[idx_front] += self.t_overtake_loser;
                 } else {
                     // BLOKOWANIE (brak wystarczającej przewagi prędkości LUB zakręt)
                     // Oblicz obecny dystans

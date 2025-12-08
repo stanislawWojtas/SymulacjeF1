@@ -80,13 +80,19 @@ impl Car {
         }
     }
 
-    /// Metoda zwraca stratę czasu z powodu bolidu, kierowcy i degradacji opon.
-    /// Usunięto wpływ masy paliwa.
+
     pub fn calc_basic_timeloss(&self, s_mass: f64) -> f64 { // _s_mass jest ignorowane
         let degr_pars = self.driver.get_degr_pars(&self.tireset.compound);
+        let tire_loss = self.tireset.t_add_tireset(&degr_pars);
+        
+        if self.car_no == 44 {
+             // println!("DEBUG: Car 44: Compound: {}, Age: {}, TireLoss: {}, Fuel: {}", 
+             //    self.tireset.compound, self.tireset.age_tot, tire_loss, self.m_fuel);
+        }
+
         self.t_car
             + self.driver.t_driver
-            + self.tireset.t_add_tireset(&degr_pars)
+            + tire_loss
             + self.m_fuel * s_mass
     }
 
@@ -138,10 +144,10 @@ impl Car {
             );
         }
         
-        //= TANKOWANIE
-        if strategy_entry.refuel_mass > 0.0 {
-            self.m_fuel += strategy_entry.refuel_mass;
-        }
+        // Refueling logic removed
+        // if strategy_entry.refuel_mass > 0.0 {
+        //     self.m_fuel += strategy_entry.refuel_mass;
+        // }
 
         
     }
@@ -152,17 +158,17 @@ impl Car {
         let strategy_entry = self.get_strategy_entry(inlap);
 
         // Czas zmiany opon
-        let mut t_standstill = if !strategy_entry.compound.is_empty() {
+        let t_standstill = if !strategy_entry.compound.is_empty() {
             self.t_pit_tirechange
         } else {
             0.0
         };
 
-        // DODAJ TO: Jeśli tankujemy, bierzemy MAX(czas opon, czas tankowania)
-        if strategy_entry.refuel_mass > 0.0 {
-             let t_refuel = strategy_entry.refuel_mass * self.t_pit_refuel_per_kg.unwrap_or(0.0);
-             t_standstill = t_standstill.max(t_refuel);
-        }
+        // Refueling time calculation removed
+        // if strategy_entry.refuel_mass > 0.0 {
+        //      let t_refuel = strategy_entry.refuel_mass * self.t_pit_refuel_per_kg.unwrap_or(0.0);
+        //      t_standstill = t_standstill.max(t_refuel);
+        // }
 
         t_standstill
     }
