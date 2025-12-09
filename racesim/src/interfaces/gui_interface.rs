@@ -22,4 +22,7 @@ pub struct CarState {
 pub struct RaceState {
     pub car_states: Vec<CarState>,
     pub flag_state: FlagState,
+
+    pub sc_active: bool,
+    pub sc_race_prog: f64,
 }

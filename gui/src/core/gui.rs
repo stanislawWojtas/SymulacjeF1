@@ -257,6 +257,45 @@ impl RacePlot {
         }
         */
 
+        if self.racesim_interface.race_state.sc_active {
+            let sc_prog = self.racesim_interface.race_state.sc_race_prog;
+            
+            // 1. Oblicz dystans na torze dla SC
+            let sc_dists = self.track.get_dists_for_race_progs(&[sc_prog]);
+            
+            // 2. Pobierz współrzędne ekranowe
+            let sc_coords = self.track.get_coords_for_dists(&sc_dists);
+            
+            // 3. Konwertuj na współrzędne GUI (egui)
+            if let Some(sc_point) = sc_coords.first() {
+                let sc_pos_screen = to_screen * egui::Pos2 {
+                    x: sc_point.x as f32,
+                    y: sc_point.y as f32,
+                };
+
+                // 4. Narysuj CZERWONY KWADRAT
+                // Rect::from_center_size tworzy prostokąt wokół punktu środkowego
+                let rect_size = egui::Vec2::new(30.0, 30.0); // Rozmiar kwadratu (większy niż kropki aut)
+                let sc_rect = egui::Rect::from_center_size(sc_pos_screen, rect_size);
+
+                shapes.push(egui::Shape::rect_filled(
+                    sc_rect,
+                    2.0, // Zaokrąglenie rogów (opcjonalne)
+                    egui::Color32::RED,
+                ));
+
+                // 5. Dodaj podpis "SC"
+                shapes.push(egui::Shape::text(
+                    ui.fonts(),
+                    sc_pos_screen + egui::Vec2::new(15.0, -20.0), // Przesunięcie tekstu
+                    egui::Align2::LEFT_BOTTOM,
+                    "SC",
+                    egui::TextStyle::Heading, // Większa czcionka
+                    egui::Color32::RED,
+                ));
+            }
+        }
+
         // CARS DRAWING ----------------------------------------------------------------------------
         // calculate current car coordinates and prepare the GUI car states for drawing
         let tmp_race_progs: Vec<f64> = self

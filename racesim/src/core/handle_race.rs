@@ -58,10 +58,18 @@ pub fn handle_race(
 
             // update GUI
             if race.cur_racetime > t_race_update_gui + 1.0 / MAX_GUI_UPDATE_FREQUENCY - 0.001 {
+
+                let sc_prog = if race.safety_car.active{
+                    race.safety_car.lap as f64 + race.safety_car.s_track / race.track.length
+                } else {
+                    0.0
+                };
                 // create RaceState struct and set data
                 let mut race_state = RaceState {
                     car_states: Vec::with_capacity(race.cars_list.len()),
                     flag_state: race.flag_state.to_owned(),
+                    sc_active: race.safety_car.active,
+                    sc_race_prog: sc_prog,
                 };
 
                 for (i, car) in race.cars_list.iter().enumerate() {

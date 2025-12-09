@@ -12,6 +12,8 @@ pub struct RaceResult {
     pub car_driver_pairs: Vec<CarDriverPair>,
     pub laptimes: Vec<Vec<f64>>,
     pub racetimes: Vec<Vec<f64>>,
+    pub sc_active: bool, // czy SC jest na torze
+    pub sc_position: f64, //gdzie jest SC
 }
 
 impl RaceResult {

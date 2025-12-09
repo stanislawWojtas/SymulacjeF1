@@ -1,9 +1,11 @@
+use crate::core::car;
 use crate::core::driver::Driver;
 use crate::core::state_handler::StateHandler;
 use crate::core::tireset::Tireset;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::rc::Rc;
+use rand::Rng;
 
 /// Uproszczona strategia: dodano z powrotem `driver_initials` tylko dla startu.
 /// * `inlap` - Okrążenie zjazdowe pit stopu (0 dla info o oponach na starcie)
@@ -17,6 +19,12 @@ pub struct StrategyEntry {
     pub compound: String,
     pub driver_initials: String, // Przywrócone na potrzeby inicjalizacji
     pub refuel_mass: f64,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum CarStatus{
+    Running,
+    DNF,
 }
 
 /// Uproszczone parametry bolidu.
@@ -45,6 +53,8 @@ pub struct CarPars {
 pub struct Car {
     pub car_no: u32,
     pub color: String,
+    pub status: CarStatus,
+    pub reliability: f64,
     t_car: f64,
     m_fuel: f64,              
     b_fuel_per_lap: f64,  
@@ -63,6 +73,8 @@ impl Car {
         Car {
             car_no: car_pars.car_no,
             color: car_pars.color.to_owned(),
+            status: CarStatus::Running,
+            reliability: 0.8, // 0.1% na awarie silnika
             t_car: car_pars.t_car,
             m_fuel: car_pars.m_fuel,
             b_fuel_per_lap: car_pars.b_fuel_per_lap, 
@@ -99,6 +111,18 @@ impl Car {
     /// Metoda zwiększa wiek opon.
     /// Usunięto spalanie paliwa.
     pub fn drive_lap(&mut self) {
+
+        //obsługa awarii
+        if (self.status == CarStatus::DNF){
+            return;
+        }
+        let mut rng = rand::thread_rng();
+        if(rng.gen::<f64>() > self.reliability){
+            self.status = CarStatus::DNF;
+            println!("CRASH: Car {} has retired from the race due to engine failure", self.car_no)
+        }
+
+
         // Usunięto logikę m_fuel
         self.m_fuel -= self.b_fuel_per_lap; // <--- SPALAMY
 
@@ -122,26 +146,29 @@ impl Car {
     }
 
     /// Metoda pobiera wpis strategii dla bieżącego okrążenia zjazdowego.
-    fn get_strategy_entry(&self, inlap: u32) -> StrategyEntry {
+    /// Zwraca `None`, jeśli brak wpisu dla danego `inlap`.
+    fn get_strategy_entry(&self, inlap: u32) -> Option<StrategyEntry> {
         self.strategy
             .iter()
             .find(|&x| x.inlap == inlap)
-            .expect("Could not find strategy entry that belongs to the inserted in-lap!")
-            .to_owned()
+            .cloned()
     }
 
     /// Metoda wykonuje pit stop: tylko zmiana opon.
     /// Usunięto tankowanie i zmiany kierowców.
     pub fn perform_pitstop(&mut self, inlap: u32, _drivers_list: &HashMap<String, Rc<Driver>>) {
-        // get strategy entry
-        let strategy_entry = self.get_strategy_entry(inlap);
-
-        // handle tire change
-        if !strategy_entry.compound.is_empty() {
-            self.tireset = Tireset::new(
-                strategy_entry.compound.to_owned(),
-                strategy_entry.tire_start_age,
-            );
+        // get strategy entry (opcjonalnie)
+        if let Some(strategy_entry) = self.get_strategy_entry(inlap) {
+            // handle tire change
+            if !strategy_entry.compound.is_empty() {
+                self.tireset = Tireset::new(
+                    strategy_entry.compound.to_owned(),
+                    strategy_entry.tire_start_age,
+                );
+            }
+        } else {
+            // Brak wpisu strategii dla tego okrążenia – pomijamy pit stop.
+            // Pozostawiamy bieżący zestaw opon bez zmian.
         }
         
         // Refueling logic removed
@@ -155,12 +182,17 @@ impl Car {
     /// Metoda zwraca czas postoju w alei.
     /// Tylko czas zmiany opon.
     pub fn t_add_pit_standstill(&self, inlap: u32) -> f64 {
-        let strategy_entry = self.get_strategy_entry(inlap);
+        let strategy_entry_opt = self.get_strategy_entry(inlap);
 
-        // Czas zmiany opon
-        let t_standstill = if !strategy_entry.compound.is_empty() {
-            self.t_pit_tirechange
+        // Czas zmiany opon (tylko jeśli strategia przewiduje zmianę)
+        let t_standstill = if let Some(strategy_entry) = strategy_entry_opt {
+            if !strategy_entry.compound.is_empty() {
+                self.t_pit_tirechange
+            } else {
+                0.0
+            }
         } else {
+            // Brak wpisu strategii – brak postoju
             0.0
         };
 
