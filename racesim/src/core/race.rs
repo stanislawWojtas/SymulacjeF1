@@ -57,7 +57,7 @@ impl Default for FlagState {
 }
 impl SafetyCar {
     pub fn new() -> Self{
-        SafetyCar { active: false, s_track: 0.0, speed: 70.0, lap: 0 }
+        SafetyCar { active: false, s_track: 0.0, speed: 50.0, lap: 0 }
     }
 }
 
@@ -194,15 +194,32 @@ impl Race {
             if !self.safety_car.active{
                 self.safety_car.active = true;
                 // safety car startuje z poziomu lidera
-                let leader_idx = self.cars_list.iter().position(|c| c.sh.get_compl_lap() == self.cur_lap_leader - 1).unwrap_or(0);
-                self.safety_car.s_track = self.cars_list[leader_idx].sh.get_s_tracks().1 + 500.0; // wjeżdża 500m przed lidera
-                self.safety_car.lap = self.cur_lap_leader;
+                let mut leader_idx = 0;
+                let mut max_prog = -1.0;
+                
+                // szukamy lidera wyścigu i to przed nim będzie safety car
+                for(i, car) in self.cars_list.iter().enumerate(){
+                    let prog = car.sh.get_race_prog();
+                    if prog > max_prog && car.status != CarStatus::DNF{
+                        max_prog = prog;
+                        leader_idx = i;
+                    }
+                }
+
+                self.safety_car.s_track = self.cars_list[leader_idx].sh.get_s_tracks().1 + 500.0;
+                // Obsługa przypadku, gdy dodanie 500m wyrzuca SC na następne okrążenie
+                if self.safety_car.s_track > self.track.length {
+                    self.safety_car.s_track -= self.track.length;
+                    self.safety_car.lap = self.cur_lap_leader + 1;
+                } else {
+                    self.safety_car.lap = self.cur_lap_leader;
+                }
             }
 
             // przecunięcie SC do przodu
             self.safety_car.s_track += self.safety_car.speed * self.timestep_size;
 
-            if(self.safety_car.s_track > self.track.length) {
+            if self.safety_car.s_track > self.track.length {
                 self.safety_car.s_track -= self.track.length;
                 self.safety_car.lap +=1;
             }
@@ -289,113 +306,157 @@ impl Race {
     }
 
     /// Dostosowuje teoretyczne czasy okrążeń (uproszczone).
+/// Dostosowuje teoretyczne czasy okrążeń (uproszczone + SC logic).
     fn calc_cur_laptimes(&mut self) {
-        // --- CZĘŚĆ 1: PODSTAWOWE OBLICZENIA DLA KAŻDEGO AUTA ---
-        for (i, car) in self.cars_list.iter().enumerate() {
+        // Sprawdź czy Safety Car jest fizycznie na torze i aktywny
+        let sc_active = matches!(self.flag_state, FlagState::Sc) && self.safety_car.active;
+        
+        let sc_speed = if sc_active { self.safety_car.speed } else { 0.0 };
 
-            // jezeli jest awaria - POPRAWIONA SKŁADNIA == na =
+        // Oblicz całkowity dystans Safety Cara od startu wyścigu.
+        // Safety Car `lap` to numer aktualnego okrążenia (od 1).
+        // Dla dystansu potrzebujemy liczby UKOŃCZONYCH okrążeń, więc (lap - 1).
+        let sc_completed_laps = if self.safety_car.lap > 0 { self.safety_car.lap - 1 } else { 0 };
+        let sc_total_dist = if sc_active {
+            sc_completed_laps as f64 * self.track.length + self.safety_car.s_track
+        } else {
+            0.0
+        };
+
+        // --- CZĘŚĆ 1: PODSTAWOWE OBLICZENIA (FIZYKA + PIT STOPY) ---
+        // (SC Logic wyrzucone stąd do osobnego bloku niżej, żeby obsłużyć kolejkowanie)
+        for (i, car) in self.cars_list.iter().enumerate() {
             if car.status == CarStatus::DNF {
                 self.cur_laptimes[i] = f64::INFINITY;
                 continue;
             }
 
+            // Startujemy od teoretycznego czasu (fizyka)
             self.cur_laptimes[i] = self.cur_th_laptimes[i];
 
-            // consider time loss due to a pit stop
+            // Obsługa Flag (jeśli nie SC)
+            if !sc_active && !car.sh.pit_act {
+                if self.cur_laptimes[i] < self.get_min_laptime_flag_state() {
+                    self.cur_laptimes[i] = self.get_min_laptime_flag_state();
+                }
+                // Dodatki wyścigowe (DRS, Duel) tylko gdy nie ma SC
+                if car.sh.drs_act {
+                    self.cur_laptimes[i] += self.track.t_drseffect / self.track.overtaking_zones_lap_frac;
+                }
+                if car.sh.duel_act {
+                    self.cur_laptimes[i] += self.t_duel / self.track.overtaking_zones_lap_frac;
+                }
+            }
+
+            // Kary za zakręty
+            if car.sh.corner_act {
+                self.cur_laptimes[i] += 0.5;
+            }
+
+            // Obsługa Pit Stopów
             if car.sh.pit_act {
                 if !car.sh.pit_standstill_act {
-                    // case 1: driving through the pit lane
-                    self.cur_laptimes[i] = self.track.length / self.track.pit_speedlimit
-                        * self.track.real_length_pit_zone
-                        / self.track.track_length_pit_zone;
+                    self.cur_laptimes[i] = self.track.length / self.track.pit_speedlimit * self.track.real_length_pit_zone / self.track.track_length_pit_zone;
                 } else {
-                    // case 2: car is in standstill
                     if let Some(t_driving) = car.sh.check_leaves_standstill(self.timestep_size) {
-                        // case 2a: car returns from standstill
-                        self.cur_laptimes[i] = self.track.length / self.track.pit_speedlimit
-                            * self.track.real_length_pit_zone
-                            / self.track.track_length_pit_zone
-                            * self.timestep_size
-                            / t_driving;
+                        self.cur_laptimes[i] = self.track.length / self.track.pit_speedlimit * self.track.real_length_pit_zone / self.track.track_length_pit_zone * self.timestep_size / t_driving;
                     } else {
-                        // case 2b: car stays in standstill
                         self.cur_laptimes[i] = f64::INFINITY;
                     }
                 }
             }
-
-            if car.sh.drs_act {
-                self.cur_laptimes[i] +=
-                    self.track.t_drseffect / self.track.overtaking_zones_lap_frac;
-            }
-
-            // consider current flag state
-            if !car.sh.pit_act && self.cur_laptimes[i] < self.get_min_laptime_flag_state() {
-                self.cur_laptimes[i] = self.get_min_laptime_flag_state()
-            }
-
-            if car.sh.duel_act {
-                self.cur_laptimes[i] += self.t_duel / self.track.overtaking_zones_lap_frac;
-            }
-
-            if car.sh.corner_act {
-                self.cur_laptimes[i] += 0.5; // Kara czasowa za zakręt
-            }
         }
 
-        // --- CZĘŚĆ 2: NOWA LOGIKA INTERAKCJI (Wyprzedzanie / Blokowanie) ---
-        // Uwaga: Musimy rozdzielić odczyt (self) od zapisu (self.cur_laptimes), 
-        // aby zadowolić Borrow Checkera w Rust.
-        
-        let idxs_sorted = self.get_idx_list_sorted_by_biggest_gap();
-        let car_pair_idxs_list = self.get_car_pair_idxs_list(&idxs_sorted, true);
+        // --- CZĘŚĆ 2: LOGIKA SAFETY CAR (KOLEJKOWANIE) ---
+        if sc_active {
+            // 1. Sortujemy auta według pozycji na torze (kto jest pierwszy)
+            let mut car_indices: Vec<usize> = (0..self.cars_list.len()).collect();
+            car_indices.sort_by(|&a, &b| {
+                // Sortowanie malejące po postępie wyścigu
+                self.cars_list[b].sh.get_race_prog().partial_cmp(&self.cars_list[a].sh.get_race_prog()).unwrap()
+            });
 
-        // Bufor na zmiany czasów, aby nie modyfikować `self` w pętli czytającej `self`
-        let mut laptimes_updates: Vec<(usize, f64)> = Vec::new();
+            // 2. Ustalamy punkt odniesienia dla lidera (jest nim Safety Car)
+            let mut front_obj_pos = sc_total_dist;
+            // Prędkość obiektu z przodu (bazowa prędkość pociągu)
+            let _front_obj_speed = sc_speed;
 
-        for pair_idxs in car_pair_idxs_list.iter() {
-            let idx_front = pair_idxs[0];
-            let idx_rear = pair_idxs[1];
+            // Parametry kolejkowania
+            let target_gap = 15.0; // Metrów odstępu między autami
+            let catchup_factor = 0.5; // Jak agresywnie nadrabiać dystans
 
-            // Oblicz przewidywany dystans czasowy na koniec tego kroku symulacji
-            let delta_t_proj =
-                self.calc_projected_delta_t(idx_front, idx_rear, self.timestep_size);
+            for &i in &car_indices {
+                // Pomijamy auta w boksach i DNF
+                if self.cars_list[i].status == CarStatus::DNF || self.cars_list[i].sh.pit_act {
+                    continue;
+                }
 
-            // Jeśli dystans jest mniejszy niż minimalny bezpieczny (min_t_dist)
-            // ORAZ auto z tyłu nie jest w boksie
-            if !self.cars_list[idx_front].sh.pit_act
-                && delta_t_proj < self.min_t_dist
-            {
-                let overtake_threshold = 0.2;
-                let potential_pace_diff = self.cur_th_laptimes[idx_front] - self.cur_th_laptimes[idx_rear];
-                let in_corner = self.cars_list[idx_front].sh.corner_act || self.cars_list[idx_rear].sh.corner_act;
+                // Oblicz dystans tego auta
+                let car_pos = self.cars_list[i].sh.get_race_prog() * self.track.length;
+                
+                // Dystans do obiektu przed nami (SC lub inne auto)
+                let gap = front_obj_pos - car_pos;
 
-                if potential_pace_diff > overtake_threshold && !in_corner {
-                    // WYPRZEDZANIE
-                    // Zapisujemy zmiany do bufora
-                    laptimes_updates.push((idx_rear, 0.1)); // Auto z tyłu traci 0.1s
-                    laptimes_updates.push((idx_front, self.t_overtake_loser)); // Auto z przodu traci
-                } else {
-                    // BLOKOWANIE
-                    let delta_t_cur = self.calc_projected_delta_t(idx_front, idx_rear, 0.0);
+                // Obliczamy docelową prędkość, żeby utrzymać 5m odstępu
+                // Wzór: v_target = v_sc + (różnica_dystansu * współczynnik)
+                // Jeśli gap > 5m -> jedź szybciej niż SC
+                // Jeśli gap < 5m -> jedź wolniej niż SC
+                let speed_correction = (gap - target_gap) * catchup_factor;
+                let mut target_speed = sc_speed + speed_correction;
 
-                    // Oblicz, o ile musimy zwolnić
-                    let t_gap_add = (self.min_t_dist - delta_t_cur) / 5.0 * self.cur_laptimes[idx_rear];
+                // ZABEZPIECZENIA:
+                // 1. Nie możemy jechać szybciej niż pozwala na to bolid (max speed)
+                let max_phys_speed = self.track.length / self.cur_th_laptimes[i];
+                if target_speed > max_phys_speed {
+                    target_speed = max_phys_speed;
+                }
 
-                    // Sprawdź czy trzeba zwolnić
-                    let target_time = self.cur_laptimes[idx_front] + t_gap_add;
-                    if self.cur_laptimes[idx_rear] < target_time {
-                         // Oblicz różnicę do dodania
-                         let diff = target_time - self.cur_laptimes[idx_rear];
-                         laptimes_updates.push((idx_rear, diff));
+                // 2. Nie możemy jechać do tyłu ani stać w miejscu (chyba że korek totalny)
+                if target_speed < 10.0 {
+                    target_speed = 10.0; 
+                }
+
+                // Aplikujemy prędkość (zamiana na czas okrążenia)
+                self.cur_laptimes[i] = self.track.length / target_speed;
+
+                // Aktualizujemy pozycję "obiektu z przodu" dla NASTĘPNEGO auta w kolejce.
+                // Następne auto ma trzymać 5m odstępu od TEGO auta.
+                front_obj_pos = car_pos;
+            }
+        } 
+        // --- CZĘŚĆ 3: INTERAKCJE (TYLKO BEZ SC) ---
+        else {
+            let idxs_sorted = self.get_idx_list_sorted_by_biggest_gap();
+            let car_pair_idxs_list = self.get_car_pair_idxs_list(&idxs_sorted, true);
+            let mut laptimes_updates: Vec<(usize, f64)> = Vec::new();
+
+            for pair_idxs in car_pair_idxs_list.iter() {
+                let idx_front = pair_idxs[0];
+                let idx_rear = pair_idxs[1];
+                let delta_t_proj = self.calc_projected_delta_t(idx_front, idx_rear, self.timestep_size);
+
+                if !self.cars_list[idx_front].sh.pit_act && delta_t_proj < self.min_t_dist {
+                    let overtake_threshold = 0.2;
+                    let potential_pace_diff = self.cur_th_laptimes[idx_front] - self.cur_th_laptimes[idx_rear];
+                    let in_corner = self.cars_list[idx_front].sh.corner_act || self.cars_list[idx_rear].sh.corner_act;
+
+                    if potential_pace_diff > overtake_threshold && !in_corner {
+                        laptimes_updates.push((idx_rear, 0.1));
+                        laptimes_updates.push((idx_front, self.t_overtake_loser));
+                    } else {
+                        let delta_t_cur = self.calc_projected_delta_t(idx_front, idx_rear, 0.0);
+                        let t_gap_add = (self.min_t_dist - delta_t_cur) / 5.0 * self.cur_laptimes[idx_rear];
+                        let target_time = self.cur_laptimes[idx_front] + t_gap_add;
+                        if self.cur_laptimes[idx_rear] < target_time {
+                            let diff = target_time - self.cur_laptimes[idx_rear];
+                            laptimes_updates.push((idx_rear, diff));
+                        }
                     }
                 }
             }
-        }
-
-        // Aplikujemy zmiany z bufora
-        for (idx, time_add) in laptimes_updates {
-            self.cur_laptimes[idx] += time_add;
+            for (idx, time_add) in laptimes_updates {
+                self.cur_laptimes[idx] += time_add;
+            }
         }
     }
 

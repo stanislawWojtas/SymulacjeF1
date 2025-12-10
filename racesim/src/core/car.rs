@@ -74,7 +74,7 @@ impl Car {
             car_no: car_pars.car_no,
             color: car_pars.color.to_owned(),
             status: CarStatus::Running,
-            reliability: 0.8, // 0.1% na awarie silnika
+            reliability: 0.99, // 0.1% na awarie silnika
             t_car: car_pars.t_car,
             m_fuel: car_pars.m_fuel,
             b_fuel_per_lap: car_pars.b_fuel_per_lap, 
