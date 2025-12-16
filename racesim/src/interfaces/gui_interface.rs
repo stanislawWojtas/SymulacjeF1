@@ -25,4 +25,7 @@ pub struct RaceState {
 
     pub sc_active: bool,
     pub sc_race_prog: f64,
+
+    // true if raining (for GUI effects)
+    pub weather_is_rain: bool,
 }

@@ -66,6 +66,9 @@ pub struct Car {
     pub driver: Rc<Driver>,
     pub sh: StateHandler,
     tireset: Tireset,
+    pub dirty_air_wear_factor: f64,
+    pub last_slick_compound: Option<String>,
+
 }
 
 impl Car {
@@ -74,7 +77,7 @@ impl Car {
             car_no: car_pars.car_no,
             color: car_pars.color.to_owned(),
             status: CarStatus::Running,
-            reliability: 0.99, // 0.1% na awarie silnika
+            reliability: 0.99, // 1% na awarie silnika
             t_car: car_pars.t_car,
             m_fuel: car_pars.m_fuel,
             b_fuel_per_lap: car_pars.b_fuel_per_lap, 
@@ -89,53 +92,80 @@ impl Car {
                 car_pars.strategy[0].compound.to_owned(),
                 car_pars.strategy[0].tire_start_age,
             ),
+            dirty_air_wear_factor: 1.0,
+            last_slick_compound: match car_pars.strategy[0].compound.as_str() {
+                "Soft" | "Medium" | "Hard" => Some(car_pars.strategy[0].compound.to_owned()),
+                _ => None,
+            },
         }
     }
 
 
-    pub fn calc_basic_timeloss(&self, s_mass: f64) -> f64 { // _s_mass jest ignorowane
+    pub fn calc_basic_timeloss(&self, s_mass: f64, is_wet: bool) -> f64 { // _s_mass jest ignorowane
         let degr_pars = self.driver.get_degr_pars(&self.tireset.compound);
         let tire_loss = self.tireset.t_add_tireset(&degr_pars);
         
-        if self.car_no == 44 {
-             // println!("DEBUG: Car 44: Compound: {}, Age: {}, TireLoss: {}, Fuel: {}", 
-             //    self.tireset.compound, self.tireset.age_tot, tire_loss, self.m_fuel);
+        // Pogoda
+        let mut weather_penalty = 0.0;
+        let compound = self.tireset.compound.as_str();
+
+        if is_wet {
+            match compound {
+                "Soft" | "Medium" | "Hard" => {
+                    weather_penalty = 20.0;
+                },
+                "Intermediate" => {
+                    //opony przejściowe -> brak kary
+                    weather_penalty = 0.0;
+                },
+                "Wet" => {
+                    weather_penalty = 2.0;
+                },
+                _ => {
+                    // inne mieszanki -> brak dodatkowej kary
+                    weather_penalty = 0.0;
+                }
+            }
+        } else {
+            //jesli sucho
+            if compound == "Intermediate" || compound == "Wet"{
+                weather_penalty = 5.0; //duża kara za nieodpowiednie opony
+            }
         }
 
         self.t_car
             + self.driver.t_driver
             + tire_loss
             + self.m_fuel * s_mass
+            + weather_penalty
     }
 
     /// Metoda zwiększa wiek opon.
     /// Usunięto spalanie paliwa.
-    pub fn drive_lap(&mut self) {
+    pub fn drive_lap(&mut self, lap_time_s: f64, failure_rate_per_hour: f64) {
 
         //obsługa awarii
         if (self.status == CarStatus::DNF){
             return;
         }
         let mut rng = rand::thread_rng();
-        if(rng.gen::<f64>() > self.reliability){
-            self.status = CarStatus::DNF;
-            println!("CRASH: Car {} has retired from the race due to engine failure", self.car_no)
+        if failure_rate_per_hour > 0.0 {
+            // Model Poissona: p_awarii_w_okrazeniu = 1 - exp(-lambda * t_okrazenia)
+            // lambda [1/s] = failure_rate_per_hour / 3600
+            let lambda = failure_rate_per_hour / 3600.0;
+            let p_fail = 1.0 - (-lambda * lap_time_s).exp();
+            if rng.gen::<f64>() < p_fail {
+                self.status = CarStatus::DNF;
+                println!("CRASH: Car {} has retired from the race due to engine failure", self.car_no)
+            }
         }
 
+        // W nowoczesnym F1 brak tankowania w wyścigu – nie modelujemy spalania paliwa.
+        // Pozostawiamy masę paliwa stałą, aby uniknąć ostrzeżeń i nienaturalnych efektów.
 
-        // Usunięto logikę m_fuel
-        self.m_fuel -= self.b_fuel_per_lap; // <--- SPALAMY
+        self.tireset.drive_lap(self.dirty_air_wear_factor);
 
-        // Zabezpieczenie przed ujemnym paliwem (chociaż w F1 to dyskwalifikacja, tu symulujemy dalej)
-        if self.m_fuel < 0.0 {
-            println!(
-                "WARNING: Remaining fuel mass of car {} is negative!",
-                self.car_no
-            );
-            self.m_fuel = 0.0;
-        }
-
-        self.tireset.drive_lap();
+        self.dirty_air_wear_factor = 1.0
     }
 
     /// Metoda sprawdza, czy bolid zjeżdża do alei w tym okrążeniu.
@@ -165,6 +195,12 @@ impl Car {
                     strategy_entry.compound.to_owned(),
                     strategy_entry.tire_start_age,
                 );
+                match self.tireset.compound.as_str() {
+                    "Soft" | "Medium" | "Hard" => {
+                        self.last_slick_compound = Some(self.tireset.compound.to_owned());
+                    },
+                    _ => {},
+                }
             }
         } else {
             // Brak wpisu strategii dla tego okrążenia – pomijamy pit stop.
@@ -203,5 +239,35 @@ impl Car {
         // }
 
         t_standstill
+    }
+
+    pub fn get_current_compound(&self) -> &str {
+        self.tireset.compound.as_str()
+    }
+
+    pub fn schedule_weather_strategy(&mut self, inlap: u32, compound: &str) {
+        if let Some(entry) = self.strategy.iter_mut().find(|e| e.inlap == inlap) {
+            entry.compound = compound.to_owned();
+        } else {
+            self.strategy.push(StrategyEntry {
+                inlap,
+                tire_start_age: 0,
+                compound: compound.to_owned(),
+                driver_initials: String::new(),
+                refuel_mass: 0.0,
+            });
+        }
+    }
+
+    pub fn set_fuel_mass(&mut self, mass: f64) {
+        self.m_fuel = mass.max(0.0);
+    }
+
+    pub fn get_fuel_mass(&self) -> f64 {
+        self.m_fuel
+    }
+
+    pub fn fuel_needed_for_laps(&self, laps: u32) -> f64 {
+        self.b_fuel_per_lap * laps as f64
     }
 }

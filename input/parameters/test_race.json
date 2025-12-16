@@ -1,7 +1,8 @@
 {
   "race_pars": {
     "season": 2024,
-    "tot_no_laps": 20,
+    "tot_no_laps": 53,
+    "collision_factor": 1.0,
     "drs_allowed_lap": 2,
     "min_t_dist": 0.5,
     "t_duel": 0.1,
@@ -27,8 +28,7 @@
     "s23": 4000.0,
     "pit_zone": [5600.0, 100.0],
     "drs_measurement_points": [2000.0, 4000.0],
-    "overtaking_zones": [[2000.0, 2500.0], [
-		4000.0, 4500.0]],
+    "overtaking_zones": [[2000.0, 2500.0], [4000.0, 4500.0]],
     "corners": [[900.0, 1020.0], [2100.0, 2220.0], [2450.0, 2650.0], [2820.0, 2940.0], [3920.0, 4010.0], [4100.0, 4190.0], [5100.0, 5400.0]],
     "pits_aft_finishline": true
   },
@@ -37,45 +37,60 @@
       "initials": "HAM",
       "name": "Lewis Hamilton",
       "t_driver": 0.1,
+      "aggression": 0.6,
       "vel_max": 335.0,
       "degr_pars_all": {
         "SOFT": {
-          "degr_model": "lin",
-          "k_0": -1.5,
-          "k_1_lin": 0.3
+          "degr_model": "nonlin_with_cliff",
+          "k_0": -1.5,       
+          "k_1_lin": 0.06,   
+          "cliff_age": 12.0, 
+          "k_2_cliff": 0.20  
         },
         "MEDIUM": {
-          "degr_model": "lin",
-          "k_0": 0.2,
-          "k_1_lin": 0.06
+          "degr_model": "nonlin_with_cliff",
+          "k_0": -0.5,       
+          "k_1_lin": 0.04,   
+          "cliff_age": 20.0, 
+          "k_2_cliff": 0.10  
         },
         "HARD": {
-          "degr_model": "lin",
-          "k_0": 0.0,
-          "k_1_lin": 0.05
+          "degr_model": "nonlin_with_cliff",
+          "k_0": 0.5,        
+          "k_1_lin": 0.02,   
+          "cliff_age": 35.0, 
+          "k_2_cliff": 0.05  
         }
       }
-    },
+    }
+    ,
     "VER": {
       "initials": "VER",
       "name": "Max Verstappen",
       "t_driver": 0.0,
+      "aggression": 0.7,
       "vel_max": 340.0,
       "degr_pars_all": {
         "SOFT": {
-          "degr_model": "lin",
-          "k_0": -1.5,
-          "k_1_lin": 0.3
+          "degr_model": "nonlin_with_cliff",
+          "k_0": -1.5,       
+          "k_1_lin": 0.06,   
+          "cliff_age": 12.0, 
+          "k_2_cliff": 0.20  
         },
         "MEDIUM": {
-          "degr_model": "lin",
-          "k_0": 0.2,
-          "k_1_lin": 0.06
+          "degr_model": "nonlin_with_cliff",
+          "k_0": -0.5,       
+          "k_1_lin": 0.04,   
+          "cliff_age": 20.0, 
+          "k_2_cliff": 0.10  
         },
         "HARD": {
-          "degr_model": "lin",
-          "k_0": 0.0,
-          "k_1_lin": 0.05
+          "degr_model": "nonlin_with_cliff",
+          "k_0": 0.5,        
+          "k_1_lin": 0.02,   
+          "cliff_age": 35.0, 
+          "k_2_cliff": 0.05  
         }
       }
     }

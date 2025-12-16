@@ -1,12 +1,17 @@
 use std::fmt::Write;
 
+use serde::{Serialize, Deserialize};
+
 /// CarDriverPair is used to store car number and driver initials for post-processing the results.
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CarDriverPair {
     pub car_no: u32,
     pub driver_initials: String,
 }
 
 /// RaceResult contains all race information that is required for post-processing the results.
+/// 
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct RaceResult {
     pub tot_no_laps: u32,
     pub car_driver_pairs: Vec<CarDriverPair>,
@@ -14,6 +19,7 @@ pub struct RaceResult {
     pub racetimes: Vec<Vec<f64>>,
     pub sc_active: bool, // czy SC jest na torze
     pub sc_position: f64, //gdzie jest SC
+    pub weather_history: Vec<String>,
 }
 
 impl RaceResult {

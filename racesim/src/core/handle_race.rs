@@ -1,4 +1,4 @@
-use crate::core::race::Race;
+use crate::core::race::{Race, WeatherState};
 use crate::interfaces::gui_interface::{CarState, RaceState, RgbColor, MAX_GUI_UPDATE_FREQUENCY};
 use crate::post::race_result::RaceResult;
 use crate::pre::read_sim_pars::SimPars;
@@ -32,9 +32,26 @@ pub fn handle_race(
     // simulate the race -> execute simulation steps until race is finished for all cars
     if !sim_realtime {
         // NORMAL SIMULATION -----------------------------------------------------------------------
+        let mut t_race_update_print = 0.0;
+        let mut last_printed_lap = 0u32;
         while !race.get_all_finished() {
             // simulate time step
             race.simulate_timestep();
+
+            // Optional live progress printing in non-GUI mode when --debug is set
+            if print_debug && race.cur_racetime > t_race_update_print + 0.9999 {
+                println!(
+                    "INFO: Simulating... Current race time is {:.3}s, current lap is {}",
+                    race.cur_racetime, race.cur_lap_leader
+                );
+                t_race_update_print = race.cur_racetime;
+            }
+
+            // Print lap completion info as leader advances (coarse-grained)
+            if print_debug && race.cur_lap_leader > last_printed_lap {
+                println!("INFO: Leader started lap {}", race.cur_lap_leader);
+                last_printed_lap = race.cur_lap_leader;
+            }
         }
     } else {
         // REAL-TIME SIMULATION --------------------------------------------------------------------
@@ -70,6 +87,7 @@ pub fn handle_race(
                     flag_state: race.flag_state.to_owned(),
                     sc_active: race.safety_car.active,
                     sc_race_prog: sc_prog,
+                    weather_is_rain: matches!(race.weather_state, WeatherState::Rain),
                 };
 
                 for (i, car) in race.cars_list.iter().enumerate() {

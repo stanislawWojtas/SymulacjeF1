@@ -14,6 +14,8 @@ pub struct DriverPars {
     pub t_driver: f64,
     #[serde(default = "default_consistency")]
     pub consistency: f64,
+    #[serde(default = "default_aggression")]
+    pub aggression: f64,
     // Usunięto t_teamorder
     pub vel_max: f64,
     pub degr_pars_all: HashMap<String, DegrPars>,
@@ -23,12 +25,17 @@ fn default_consistency() -> f64 {
     1.0
 }
 
+fn default_aggression() -> f64 {
+    0.5
+}
+
 #[derive(Debug)]
 pub struct Driver {
     pub initials: String,
     name: String,
     pub t_driver: f64,
     pub consistency: f64,
+    pub aggression: f64,
     // Usunięto t_teamorder
     vel_max: f64,
     degr_pars_all: HashMap<String, DegrPars>,
@@ -41,6 +48,7 @@ impl Driver {
             name: driver_pars.name.to_owned(),
             t_driver: driver_pars.t_driver,
             consistency: driver_pars.consistency,
+            aggression: driver_pars.aggression,
             // Usunięto t_teamorder
             vel_max: driver_pars.vel_max,
             degr_pars_all: driver_pars.degr_pars_all.to_owned(),

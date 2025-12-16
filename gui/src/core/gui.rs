@@ -296,6 +296,42 @@ impl RacePlot {
             }
         }
 
+        // WEATHER OVERLAY ------------------------------------------------------------------------
+        if self.racesim_interface.race_state.weather_is_rain {
+            // Draw a simple cloud + raindrops icon in top-right of the drawing area (dest_rect)
+            let icon_rect = dest_rect;
+            let cloud_center = egui::Pos2::new(icon_rect.max.x - 80.0, icon_rect.min.y + 60.0);
+
+            // Cloud: three overlapping circles
+            let cloud_color = egui::Color32::from_gray(180);
+            let r_big = 28.0f32;
+            let r_small = 22.0f32;
+            let offsets = [
+                egui::Vec2::new(0.0, 0.0),
+                egui::Vec2::new(-24.0, 6.0),
+                egui::Vec2::new(24.0, 6.0),
+            ];
+            for (i, off) in offsets.iter().enumerate() {
+                let radius = if i == 0 { r_big } else { r_small };
+                shapes.push(egui::Shape::circle_filled(cloud_center + *off, radius, cloud_color));
+            }
+
+            // Raindrops: short blue lines below the cloud
+            let drop_color = egui::Color32::from_rgb(100, 160, 255);
+            let drops = [
+                egui::Pos2::new(cloud_center.x - 28.0, cloud_center.y + 26.0),
+                egui::Pos2::new(cloud_center.x - 10.0, cloud_center.y + 28.0),
+                egui::Pos2::new(cloud_center.x + 8.0,  cloud_center.y + 30.0),
+                egui::Pos2::new(cloud_center.x + 26.0, cloud_center.y + 26.0),
+            ];
+            for p in drops.iter() {
+                shapes.push(egui::Shape::line_segment([
+                    *p,
+                    egui::Pos2::new(p.x, p.y + 12.0),
+                ], egui::Stroke::new(3.0, drop_color)));
+            }
+        }
+
         // CARS DRAWING ----------------------------------------------------------------------------
         // calculate current car coordinates and prepare the GUI car states for drawing
         let tmp_race_progs: Vec<f64> = self
@@ -431,11 +467,16 @@ impl epi::App for RacePlot {
         // update race interface
         self.racesim_interface.update();
 
+
         // update UI content
         egui::CentralPanel::default().show(ctx, |ui| {
             let mut frame = egui::Frame::dark_canvas(ui.style());
-            // Ustawienie zielonego tła (ciemna zieleń dla lepszego kontrastu)
-            frame.fill = egui::Color32::from_rgb(20, 80, 20); 
+            // Ustawienie tła: zielone standardowo, szare gdy pada
+            if self.racesim_interface.race_state.weather_is_rain {
+                frame.fill = egui::Color32::from_gray(60);
+            } else {
+                frame.fill = egui::Color32::from_rgb(20, 80, 20);
+            }
             frame.show(ui, |ui| {
                 self.set_ui_content(ui);
             });
