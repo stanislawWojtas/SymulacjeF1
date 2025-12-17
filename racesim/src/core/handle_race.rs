@@ -88,6 +88,7 @@ pub fn handle_race(
                     sc_active: race.safety_car.active,
                     sc_race_prog: sc_prog,
                     weather_is_rain: matches!(race.weather_state, WeatherState::Rain),
+                    final_result: None,
                 };
 
                 for (i, car) in race.cars_list.iter().enumerate() {
@@ -134,6 +135,20 @@ pub fn handle_race(
             } else {
                 println!("WARNING: Could not keep up with real-time!")
             }
+        }
+
+        // after real-time loop finishes, send final result once
+        if let Some(tx) = tx {
+            let result = race.get_race_result();
+            let final_msg = RaceState {
+                car_states: Vec::new(),
+                flag_state: race.flag_state.to_owned(),
+                sc_active: result.sc_active,
+                sc_race_prog: if result.sc_active { result.sc_position / race.track.length } else { 0.0 },
+                weather_is_rain: matches!(race.weather_state, WeatherState::Rain),
+                final_result: Some(result),
+            };
+            tx.send(final_msg).context("Failed to send final race result to GUI!")?;
         }
     }
 

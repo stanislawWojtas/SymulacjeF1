@@ -1,4 +1,5 @@
 use crate::core::race::FlagState;
+use crate::post::race_result::RaceResult;
 
 pub const MAX_GUI_UPDATE_FREQUENCY: f64 = 20.0;
 
@@ -28,4 +29,7 @@ pub struct RaceState {
 
     // true if raining (for GUI effects)
     pub weather_is_rain: bool,
+
+    // final results payload (sent once when race finishes)
+    pub final_result: Option<RaceResult>,
 }

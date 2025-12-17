@@ -1,7 +1,7 @@
 use crate::core::car::{Car, CarPars, CarStatus, StrategyEntry};
 use crate::core::driver::{Driver, DriverPars};
 use crate::core::track::{Track, TrackPars};
-use crate::post::race_result::{CarDriverPair, RaceResult};
+use crate::post::race_result::{CarDriverPair, RaceEvent, RaceResult};
 use serde::Deserialize;
 use core::f64;
 use std::collections::HashMap;
@@ -100,6 +100,7 @@ pub struct Race {
     failure_rate_per_hour: f64,
     collision_factor: f64,
     weather_history_log: Vec<String>,
+    events: Vec<RaceEvent>,
     pub cur_racetime: f64,
     pub safety_car: SafetyCar,
     sc_triggers: Vec<bool>, // auta które triggerowały safety car żeby w pętli tego nie robiły
@@ -205,6 +206,7 @@ impl Race {
             failure_rate_per_hour: race_pars.failure_rate_per_hour,
             collision_factor: race_pars.collision_factor,
             weather_history_log: Vec::new(),
+            events: Vec::new(),
             safety_car: SafetyCar::new(),
             sc_timer: 0.0,
             sc_triggers: vec![false; no_cars], //na start wszystkie false
@@ -276,6 +278,13 @@ impl Race {
                     WeatherState::Dry => {
                         println!("WEATHER CHANGE: Rain started at {:.2}s!", self.cur_racetime);
                         self.last_weather_change = self.cur_racetime;
+                        // event: rain start
+                        self.events.push(RaceEvent {
+                            kind: "WeatherRainStart".to_string(),
+                            lap: self.cur_lap_leader,
+                            time_s: self.cur_racetime,
+                            cars: vec![],
+                        });
                         // Zaplanuj pit na najbliższe okrążenie dla slicków → Intermediate
                         for (i, car) in self.cars_list.iter_mut().enumerate() {
                             if car.status == CarStatus::DNF { continue; }
@@ -294,6 +303,13 @@ impl Race {
                     WeatherState::Rain => {
                         println!("WEATHER CHANGE: Rain stopped at {:.2}s!", self.cur_racetime);
                         self.last_weather_change = self.cur_racetime;
+                        // event: dry start
+                        self.events.push(RaceEvent {
+                            kind: "WeatherDryStart".to_string(),
+                            lap: self.cur_lap_leader,
+                            time_s: self.cur_racetime,
+                            cars: vec![],
+                        });
                         // Zaplanuj pit na najbliższe okrążenia dla Inter/Wet → powrót do slicków
                         for (i, car) in self.cars_list.iter_mut().enumerate() {
                             if car.status == CarStatus::DNF { continue; }
@@ -348,6 +364,13 @@ impl Race {
                 } else {
                     self.safety_car.lap = self.cur_lap_leader;
                 }
+                // event: SC deployed
+                self.events.push(RaceEvent {
+                    kind: "SC_DEPLOYED".to_string(),
+                    lap: self.cur_lap_leader,
+                    time_s: self.cur_racetime,
+                    cars: vec![],
+                });
             }
 
             // przecunięcie SC do przodu
@@ -362,6 +385,13 @@ impl Race {
                 println!("SAFETY CAR IN THIS LAP - RACE RESUMING");
                 self.flag_state = FlagState::G;
                 self.safety_car.active = false;
+                // event: SC in
+                self.events.push(RaceEvent {
+                    kind: "SC_IN".to_string(),
+                    lap: self.cur_lap_leader,
+                    time_s: self.cur_racetime,
+                    cars: vec![],
+                });
             }
         } else{
             self.safety_car.active = false;
@@ -734,6 +764,13 @@ impl Race {
                                 self.cars_list[idx_front].car_no,
                                 self.cars_list[idx_rear].car_no
                             );
+                            // event: crash
+                            self.events.push(RaceEvent {
+                                kind: "Crash".to_string(),
+                                lap: self.cur_lap_leader,
+                                time_s: self.cur_racetime,
+                                cars: vec![self.cars_list[idx_front].car_no, self.cars_list[idx_rear].car_no],
+                            });
                             // Skip further interaction handling for this pair
                             continue;
                         }
@@ -958,6 +995,7 @@ impl Race {
             sc_active: self.safety_car.active,
             sc_position: self.safety_car.s_track,
             weather_history: self.weather_history_log.clone(),
+            events: self.events.clone(),
         }
     }
     

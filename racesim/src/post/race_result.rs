@@ -20,6 +20,7 @@ pub struct RaceResult {
     pub sc_active: bool, // czy SC jest na torze
     pub sc_position: f64, //gdzie jest SC
     pub weather_history: Vec<String>,
+    pub events: Vec<RaceEvent>,
 }
 
 impl RaceResult {
@@ -79,4 +80,12 @@ impl RaceResult {
         println!("{}", tmp_string_car_driver_info);
         println!("{}", tmp_string_racetime);
     }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct RaceEvent {
+    pub kind: String,        // "Crash", "WeatherRainStart", "WeatherDryStart", "SC_DEPLOYED", "SC_IN"
+    pub lap: u32,            // numer okrążenia w momencie zdarzenia (1-based)
+    pub time_s: f64,         // czas wyścigu w sekundach
+    pub cars: Vec<u32>,      // dotknięte auta (np. przy kraksie)
 }

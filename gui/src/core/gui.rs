@@ -1,6 +1,7 @@
 use crate::core::track::{Track, ZoneType};
 use crate::interfaces::racesim_interface::RacesimInterface;
 use eframe::{egui, epi};
+use plotters::prelude::*;
 use flume::Receiver;
 use helpers::buffer::RingBuffer;
 use helpers::general::max;
@@ -32,6 +33,9 @@ pub struct RacePlot {
     pub centerline_cl: Vec<egui::Pos2>,
     pub prev_update: Instant,
     pub prev_update_durations: RingBuffer<u32>,
+    pub show_speed: bool,
+    pub export_done: bool,
+    pub export_path: Option<String>,
 }
 
 impl RacePlot {
@@ -83,7 +87,122 @@ impl RacePlot {
             centerline_cl,
             prev_update: Instant::now(),
             prev_update_durations: RingBuffer::new(10),
+            show_speed: false,
+            export_done: false,
+            export_path: None,
         })
+    }
+
+    fn export_results_plot(&self, result: &racesim::post::race_result::RaceResult) -> anyhow::Result<String> {
+        // Prepare output path
+        let out_dir = std::path::Path::new("output");
+        std::fs::create_dir_all(out_dir)?;
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let filename = format!("race_plot_{}.png", ts);
+        let out_path = out_dir.join(filename);
+
+        // Gather y-range
+        let mut y_min = f64::INFINITY;
+        let mut y_max = f64::NEG_INFINITY;
+        let tot_laps = result.tot_no_laps as usize;
+
+        let use_speed = self.show_speed;
+        let track_len = self.track.track_cl.last().map(|el| el.s).unwrap_or(1.0);
+        for (i, _) in result.car_driver_pairs.iter().enumerate() {
+            for lap in 1..=tot_laps {
+                let lt = result.laptimes[i][lap];
+                if lt.is_finite() && lt > 0.0 {
+                    let y = if use_speed { (track_len / lt) * 3.6 } else { lt };
+                    if y < y_min { y_min = y; }
+                    if y > y_max { y_max = y; }
+                }
+            }
+        }
+        if !y_min.is_finite() || !y_max.is_finite() {
+            y_min = 0.0; y_max = 1.0;
+        }
+        let margin = (y_max - y_min) * 0.05;
+        y_min -= margin;
+        y_max += margin;
+
+        let root = BitMapBackend::new(out_path.to_str().unwrap(), (1280, 720)).into_drawing_area();
+        root.fill(&WHITE)?;
+        let mut chart = ChartBuilder::on(&root)
+            .caption(
+                if use_speed { "Średnia prędkość na okrążeniach" } else { "Czas okrążenia" },
+                ("sans-serif", 24).into_font(),
+            )
+            .margin(20)
+            .x_label_area_size(40)
+            .y_label_area_size(60)
+            .build_cartesian_2d(1u32..result.tot_no_laps, y_min..y_max)?;
+
+        // Light-grey background bands for rainy laps
+        if !result.weather_history.is_empty() {
+            for lap in 1..=result.tot_no_laps as usize {
+                if result.weather_history.get(lap - 1).map(|s| s == "Rain").unwrap_or(false) {
+                    let x0 = lap as u32;
+                    let x1 = (lap as u32).saturating_add(1);
+                    chart.draw_series(std::iter::once(Rectangle::new(
+                        [(x0, y_min), (x1, y_max)],
+                        RGBAColor(200, 200, 200, 0.20).filled(),
+                    )))?;
+                }
+            }
+        }
+
+        chart.configure_mesh()
+            .x_desc("Okrążenie")
+            .y_desc(if use_speed { "km/h" } else { "s" })
+            .label_style(("sans-serif", 16))
+            .axis_desc_style(("sans-serif", 16))
+            .draw()?;
+
+        // Color palette
+        let palette = Palette99::pick;
+
+        // Draw series
+        for (i, pair) in result.car_driver_pairs.iter().enumerate() {
+            let mut series: Vec<(u32, f64)> = Vec::new();
+            for lap in 1..=tot_laps {
+                let lt = result.laptimes[i][lap];
+                if lt.is_finite() && lt > 0.0 {
+                    let y = if use_speed { (track_len / lt) * 3.6 } else { lt };
+                    series.push((lap as u32, y));
+                }
+            }
+            chart.draw_series(LineSeries::new(series.into_iter(), palette(i)))?
+                .label(format!("{} ({})", pair.car_no, pair.driver_initials))
+                .legend(move |(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], palette(i)));
+        }
+
+        // Event markers
+        // Weather: gray, SC: orange, Crash: red
+        for ev in &result.events {
+            let x = ev.lap as u32;
+            let (color, width) = match ev.kind.as_str() {
+                "WeatherRainStart" | "WeatherDryStart" => (RGBColor(150, 150, 150), 1),
+                "SC_DEPLOYED" | "SC_IN" => (RGBColor(255, 165, 0), 1),
+                "Crash" => (RED, 2),
+                _ => (BLACK, 1),
+            };
+            chart.draw_series(std::iter::once(PathElement::new(
+                vec![(x, y_min), (x, y_max)], color.stroke_width(width),
+            )))?;
+        }
+
+        chart.configure_series_labels()
+            .border_style(&BLACK)
+            .background_style(&WHITE.mix(0.8))
+            .label_font(("sans-serif", 16))
+            .position(plotters::chart::SeriesLabelPosition::UpperRight)
+            .draw()?;
+
+        root.present()?;
+        Ok(out_path.to_string_lossy().into_owned())
     }
 
     pub fn set_ui_content(&mut self, ui: &mut egui::Ui) -> egui::Response {
@@ -467,20 +586,44 @@ impl epi::App for RacePlot {
         // update race interface
         self.racesim_interface.update();
 
-
-        // update UI content
-        egui::CentralPanel::default().show(ctx, |ui| {
-            let mut frame = egui::Frame::dark_canvas(ui.style());
-            // Ustawienie tła: zielone standardowo, szare gdy pada
-            if self.racesim_interface.race_state.weather_is_rain {
-                frame.fill = egui::Color32::from_gray(60);
-            } else {
-                frame.fill = egui::Color32::from_rgb(20, 80, 20);
+        // If we have final results, export to PNG once (do not display plot)
+        if let Some(result) = &self.racesim_interface.race_state.final_result {
+            if !self.export_done {
+                match self.export_results_plot(result) {
+                    Ok(path) => {
+                        self.export_done = true;
+                        self.export_path = Some(path);
+                    }
+                    Err(err) => {
+                        self.export_done = true;
+                        self.export_path = Some(format!("Błąd zapisu wykresu: {}", err));
+                    }
+                }
             }
-            frame.show(ui, |ui| {
-                self.set_ui_content(ui);
+            egui::CentralPanel::default().show(ctx, |ui| {
+                egui::Frame::dark_canvas(ui.style()).show(ui, |ui| {
+                    if let Some(path) = &self.export_path {
+                        ui.heading("Zapisano wykres wyników do pliku");
+                        ui.label(path);
+                    } else {
+                        ui.heading("Kończenie wyścigu...");
+                    }
+                });
             });
-        });
+        } else {
+            // update UI content (live track)
+            egui::CentralPanel::default().show(ctx, |ui| {
+                let mut frame = egui::Frame::dark_canvas(ui.style());
+                if self.racesim_interface.race_state.weather_is_rain {
+                    frame.fill = egui::Color32::from_gray(60);
+                } else {
+                    frame.fill = egui::Color32::from_rgb(20, 80, 20);
+                }
+                frame.show(ui, |ui| {
+                    self.set_ui_content(ui);
+                });
+            });
+        }
 
         // request repaint of the UI
         ctx.request_repaint();

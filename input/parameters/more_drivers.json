@@ -3,7 +3,7 @@
     "season": 2024,
     "tot_no_laps": 53,
     "iniial_weather": "Dry",
-    "rain_probability": 0.001,
+    "rain_probability": 0.2,
     "drs_allowed_lap": 2,
     "min_t_dist": 0.5,
     "t_duel": 0.1,
