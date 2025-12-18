@@ -28,6 +28,36 @@ pub struct Tireset {
     pub age_cur_stint: f64,
 }
 
+#[derive(Debug, Deserialize, Clone)]
+pub struct TireCompoundConfig {
+    pub k1_scale: f64,
+    pub default_cliff_age: f64,
+    pub default_k2: f64,
+    pub base_offset: f64,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct TireConfig {
+    pub soft: TireCompoundConfig,
+    pub medium: TireCompoundConfig,
+    pub hard: TireCompoundConfig,
+    pub intermediate: TireCompoundConfig,
+    pub wet: TireCompoundConfig,
+}
+
+impl TireConfig {
+    pub fn for_compound<'a>(&'a self, comp: &str) -> &'a TireCompoundConfig {
+        match comp.to_uppercase().as_str() {
+            "SOFT" => &self.soft,
+            "MEDIUM" => &self.medium,
+            "HARD" => &self.hard,
+            "INTERMEDIATE" => &self.intermediate,
+            "WET" => &self.wet,
+            _ => &self.medium, // neutral fallback
+        }
+    }
+}
+
 impl Tireset {
     pub fn new(compound: String, age_tot: u32) -> Tireset {
         Tireset {
@@ -45,8 +75,8 @@ impl Tireset {
 
     /// t_add_tireset zwraca obecną utratę czasu z powodu degradacji opon.
     /// Usunięto logikę 'zimnych opon'.
-    pub fn t_add_tireset(&self, degr_pars: &DegrPars) -> f64 {
-        self.calc_tire_degr(degr_pars)
+    pub fn t_add_tireset(&self, degr_pars: &DegrPars, tire_cfg: &TireConfig) -> f64 {
+        self.calc_tire_degr(degr_pars, tire_cfg)
     }
 
     /// calc_tire_degr zwraca deltę czasu degradacji opon.
@@ -54,7 +84,7 @@ impl Tireset {
     /// * `model liniowy`: t_tire_degr = k_0 + k_1_lin * age
     ///
     /// `age` to całkowity wiek opon w okrążeniach na starcie bieżącego okrążenia.
-    fn calc_tire_degr(&self, degr_pars: &DegrPars) -> f64 {
+    fn calc_tire_degr(&self, degr_pars: &DegrPars, tire_cfg: &TireConfig) -> f64 {
         // Używaj wieku STINTU (age_cur_stint), aby kara za degradację
         // rosła głównie w ramach jednego przejazdu. To sprawia, że brak pit stopów
         // powoduje wyraźnie większą stratę tempa.
@@ -66,12 +96,11 @@ impl Tireset {
         // Degradacja: SOFT x1.8, MEDIUM x1.0, HARD x0.5
         // Cliff ostrość (k2): SOFT 0.050, MEDIUM 0.020, HARD 0.010
         // Bazowe offsety: SOFT -1.0s, MEDIUM -0.5s, HARD 0.0s
-        let (k1_scale, default_cliff_age, default_k2, base_offset) = match self.compound.to_uppercase().as_str() {
-            "SOFT" => (1.8, 15.0, 0.050, -1.0),
-            "MEDIUM" => (1.0, 28.0, 0.020, -0.5),
-            "HARD" => (0.5, 45.0, 0.010, 0.0),
-            _ => (1.0, f64::INFINITY, 0.0, 0.0),
-        };
+        let cfg = tire_cfg.for_compound(&self.compound);
+        let k1_scale = cfg.k1_scale;
+        let default_cliff_age = cfg.default_cliff_age;
+        let default_k2 = cfg.default_k2;
+        let base_offset = cfg.base_offset;
 
         // Pozostał tylko model liniowy
         match degr_pars.degr_model {
@@ -91,8 +120,8 @@ impl Tireset {
             DegrModel::NonlinWithCliff => {
                 let mut degradation = degr_pars.k_0 + degr_pars.k_1_lin * age;
 
-                let cliff_age = degr_pars.cliff_age.expect("Parameter 'cliff_age' required for NonlinWithCliff model!");
-                let k_2 = degr_pars.k_2_cliff.expect("Parameter 'k_2_cliff' required for NonlinWithCliff model!");
+                let cliff_age = degr_pars.cliff_age.unwrap_or(default_cliff_age);
+                let k_2 = degr_pars.k_2_cliff.unwrap_or(default_k2);
 
                 if age > cliff_age {
                     let over_cliff = age - cliff_age;

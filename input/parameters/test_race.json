@@ -2,12 +2,7 @@
   "race_pars": {
     "season": 2024,
     "tot_no_laps": 53,
-    "collision_factor": 1.0,
     "drs_allowed_lap": 2,
-    "min_t_dist": 0.5,
-    "t_duel": 0.1,
-    "t_overtake_loser": 2.0,
-    "drs_window": 1.0,
     "use_drs": true,
     "participants": [44, 33]
   },

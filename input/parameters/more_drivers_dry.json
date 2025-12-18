@@ -5,10 +5,6 @@
     "iniial_weather": "Dry",
     "rain_probability": 0.0,
     "drs_allowed_lap": 2,
-    "min_t_dist": 0.5,
-    "t_duel": 0.1,
-    "t_overtake_loser": 0.3,
-    "drs_window": 1.0,
     "use_drs": true,
     "participants": [33, 11, 44, 63, 16, 55, 4, 81, 14, 18, 10, 31, 23, 2, 22, 3, 77, 24, 27, 20]
   },

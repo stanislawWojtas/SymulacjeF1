@@ -1,4 +1,5 @@
-use crate::core::race::{Race, WeatherState};
+use crate::core::race::{Race, WeatherState, SimConstants};
+use crate::core::tireset::TireConfig;
 use crate::interfaces::gui_interface::{CarState, RaceState, RgbColor, MAX_GUI_UPDATE_FREQUENCY};
 use crate::post::race_result::RaceResult;
 use crate::pre::read_sim_pars::SimPars;
@@ -12,6 +13,8 @@ use std::time::{Duration, Instant};
 /// the results for post-processing.
 pub fn handle_race(
     sim_pars: &SimPars,
+    sim_consts: &SimConstants,
+    tire_config: &TireConfig,
     timestep_size: f64,
     print_debug: bool,
     tx: Option<&Sender<RaceState>>,
@@ -21,6 +24,8 @@ pub fn handle_race(
     // create the race
     let mut race = Race::new(
         &sim_pars.race_pars,
+        sim_consts,
+        tire_config,
         &sim_pars.track_pars,
         &sim_pars.driver_pars_all,
         &sim_pars.car_pars_all,

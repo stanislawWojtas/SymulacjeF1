@@ -2,7 +2,7 @@ use clap::Parser;
 use flume;
 use gui::core::gui::RacePlot;
 use racesim::post::race_result::RaceResult;
-use racesim::pre::read_sim_pars::read_sim_pars;
+use racesim::pre::read_sim_pars::{read_sim_pars_flexible, read_sim_constants, read_tire_config};
 use racesim::pre::sim_opts::SimOpts;
 use std::path::PathBuf;
 use std::thread;
@@ -177,13 +177,21 @@ fn main() -> anyhow::Result<()> {
     // get simulation options from the command line arguments
     let sim_opts: SimOpts = SimOpts::parse();
 
-    // get simulation parameters
+    // get simulation parameters (scenario + data)
     let sim_pars = if let Some(parfile_path) = &sim_opts.parfile_path {
         println!("INFO: Reading simulation parameters from {:?}", parfile_path);
-        read_sim_pars(parfile_path)?
+        read_sim_pars_flexible(parfile_path)?
     } else {
         anyhow::bail!("No parameter file provided! Use -p <path_to_json> to run the simulation.");
     };
+
+    // get simulation constants (physics engine), from default path
+    let sim_consts_path: PathBuf = ["input", "parameters", "sim_constants.json"].iter().collect();
+    let sim_consts = read_sim_constants(&sim_consts_path)?;
+
+    // get tire configuration from default path
+    let tire_cfg_path: PathBuf = ["input", "parameters", "tires.json"].iter().collect();
+    let tire_cfg = read_tire_config(&tire_cfg_path)?;
 
     // print race details
     println!(
@@ -201,6 +209,8 @@ fn main() -> anyhow::Result<()> {
 
             let race_result = racesim::core::handle_race::handle_race(
                 &sim_pars,
+                &sim_consts,
+                &tire_cfg,
                 sim_opts.timestep_size,
                 sim_opts.debug,
                 None,
@@ -228,6 +238,8 @@ fn main() -> anyhow::Result<()> {
                 println!("INFO: Simulating run {}/{}", i + 1, runs);
                 let res = racesim::core::handle_race::handle_race(
                     &sim_pars,
+                    &sim_consts,
+                    &tire_cfg,
                     sim_opts.timestep_size,
                     false, // suppress per-run debug for speed; use --debug with single run
                     None,
@@ -266,10 +278,14 @@ fn main() -> anyhow::Result<()> {
         // Uruchom symulator w osobnym wątku
         let sim_opts_thread = sim_opts.clone();
         let sim_pars_thread = sim_pars.clone();
+        let sim_consts_thread = sim_consts.clone();
+        let tire_cfg_thread = tire_cfg.clone();
 
         let _ = thread::spawn(move || {
             racesim::core::handle_race::handle_race(
                 &sim_pars_thread,
+                &sim_consts_thread,
+                &tire_cfg_thread,
                 sim_opts_thread.timestep_size,
                 false, // debug wyłączony w GUI
                 Some(&tx),

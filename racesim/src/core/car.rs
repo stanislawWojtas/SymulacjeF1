@@ -1,7 +1,7 @@
 use crate::core::car;
 use crate::core::driver::Driver;
 use crate::core::state_handler::StateHandler;
-use crate::core::tireset::Tireset;
+use crate::core::tireset::{Tireset, TireConfig};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -103,9 +103,9 @@ impl Car {
     }
 
 
-    pub fn calc_basic_timeloss(&self, s_mass: f64, is_wet: bool) -> f64 {
+    pub fn calc_basic_timeloss(&self, s_mass: f64, is_wet: bool, tire_cfg: &TireConfig) -> f64 {
         let degr_pars = self.driver.get_degr_pars(&self.tireset.compound);
-        let tire_loss = self.tireset.t_add_tireset(&degr_pars);
+        let tire_loss = self.tireset.t_add_tireset(&degr_pars, tire_cfg);
 
         let mut weather_penalty = 0.0;
         let compound = self.tireset.compound.to_uppercase();

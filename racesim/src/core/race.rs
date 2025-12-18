@@ -1,6 +1,7 @@
 use crate::core::car::{Car, CarPars, CarStatus, StrategyEntry};
 use crate::core::driver::{Driver, DriverPars};
 use crate::core::track::{Track, TrackPars};
+use crate::core::tireset::TireConfig;
 use crate::post::race_result::{CarDriverPair, RaceEvent, RaceResult};
 use serde::Deserialize;
 use core::f64;
@@ -31,28 +32,32 @@ fn default_collision_factor() -> f64 { 20.0 }
 pub struct RacePars {
     pub season: u32,
     pub tot_no_laps: u32,
+    #[serde(default)]
+    pub track_name: Option<String>,
     #[serde(default = "default_initial_weather")]
     pub initial_weather: String,
     #[serde(default = "default_rain_probability")]
     pub rain_probability: f64,
-    #[serde(default = "default_min_weather_duration_s")]
-    pub min_weather_duration_s: f64,
-    #[serde(default = "default_fuel_margin")]
-    pub fuel_margin: f64,
-    /// Średnia intensywność awarii (DNF) na godzinę jazdy (np. 0.02 ≈ 2%/h)
-    #[serde(default = "default_failure_rate_per_hour")]
-    pub failure_rate_per_hour: f64,
-    /// Globalny mnożnik prawdopodobieństwa kolizji (1.0 = brak zmian)
-    #[serde(default = "default_collision_factor")]
-    pub collision_factor: f64,
     pub drs_allowed_lap: u32, 
 
-    pub min_t_dist: f64,      
-    pub t_duel: f64,          
-    pub t_overtake_loser: f64, 
-    pub drs_window: f64,      
     pub use_drs: bool,        
     pub participants: Vec<u32>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct SimConstants {
+    #[serde(default = "default_fuel_margin")] 
+    pub fuel_margin: f64,
+    #[serde(default = "default_failure_rate_per_hour")] 
+    pub failure_rate_per_hour: f64,
+    #[serde(default = "default_collision_factor")] 
+    pub collision_factor: f64,
+    #[serde(default = "default_min_weather_duration_s")] 
+    pub min_weather_duration_s: f64,
+    pub min_t_dist: f64,
+    pub t_duel: f64,
+    pub t_overtake_loser: f64,
+    pub drs_window: f64,
 }
 
 #[derive(Debug, Clone)]
@@ -127,11 +132,14 @@ pub struct Race {
     cur_th_laptimes: Vec<f64>,
     pub cars_list: Vec<Car>,
     drivers_list: HashMap<String, Rc<Driver>>,
+    pub tire_config: TireConfig,
 }
 
 impl Race {
     pub fn new(
         race_pars: &RacePars,
+        sim_consts: &SimConstants,
+        tire_config: &TireConfig,
         track_pars: &TrackPars,
         driver_pars_all: &HashMap<String, DriverPars>,
         car_pars_all: &HashMap<u32, CarPars>,
@@ -180,7 +188,7 @@ impl Race {
         // Ensure starting fuel is sufficient for the race distance (no refueling era)
         for car in cars_list.iter_mut() {
             let required = car.fuel_needed_for_laps(race_pars.tot_no_laps);
-            let target = required * (1.0 + race_pars.fuel_margin);
+            let target = required * (1.0 + sim_consts.fuel_margin);
             if car.get_fuel_mass() < target {
                 car.set_fuel_mass(target);
             }
@@ -199,10 +207,10 @@ impl Race {
             weather_state: start_weather,
             print_events: true,
             rain_probability: race_pars.rain_probability,
-            min_weather_duration_s: race_pars.min_weather_duration_s,
+            min_weather_duration_s: sim_consts.min_weather_duration_s,
             last_weather_change: 0.0,
-            failure_rate_per_hour: race_pars.failure_rate_per_hour,
-            collision_factor: race_pars.collision_factor,
+            failure_rate_per_hour: sim_consts.failure_rate_per_hour,
+            collision_factor: sim_consts.collision_factor,
             weather_history_log: Vec::new(),
             events: Vec::new(),
             safety_car: SafetyCar::new(),
@@ -215,10 +223,10 @@ impl Race {
             tot_no_laps: race_pars.tot_no_laps,
             drs_allowed_lap: race_pars.drs_allowed_lap,
             cur_lap_leader: 1,
-            min_t_dist: race_pars.min_t_dist,
-            t_duel: race_pars.t_duel,
-            t_overtake_loser: race_pars.t_overtake_loser,
-            drs_window: race_pars.drs_window,
+            min_t_dist: sim_consts.min_t_dist,
+            t_duel: sim_consts.t_duel,
+            t_overtake_loser: sim_consts.t_overtake_loser,
+            drs_window: sim_consts.drs_window,
             use_drs: race_pars.use_drs,
             flag_state: FlagState::G,
             track: Track::new(track_pars),
@@ -229,6 +237,7 @@ impl Race {
             cur_th_laptimes: vec![0.0; no_cars],
             cars_list,
             drivers_list,
+            tire_config: tire_config.clone(),
         };
 
         // initialize race for each car
@@ -469,7 +478,7 @@ impl Race {
         // Bazowy czas
         let lap_time_base = self.track.t_q
         + self.track.t_gap_racepace
-        + self.cars_list[idx].calc_basic_timeloss(self.track.s_mass, is_wet);
+        + self.cars_list[idx].calc_basic_timeloss(self.track.s_mass, is_wet, &self.tire_config);
 
         self.cur_th_laptimes[idx] = lap_time_base + random_factor;
     }
