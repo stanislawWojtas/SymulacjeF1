@@ -18,4 +18,9 @@
 - jazda w tłoku niszczy opony 2x szybciej
 
 ### Pogoda
+
+
+# Dobra jaki problem rozwiązujemy
+- No na pewno jest model stochastyczny - są zdarzenia losowe (awarie silnika modelowane rozkłądem Poissona, losowe zmiany pogody, błędy kierowców)
+- Symulacja monte carlo - wyścig można uruchomić z takimi samymi parametrami kilka razy i uśrednić wyniki
 - 

@@ -1,8 +1,10 @@
 use clap::Parser;
 use flume;
 use gui::core::gui::RacePlot;
+use racesim::post::race_result::RaceResult;
 use racesim::pre::read_sim_pars::read_sim_pars;
 use racesim::pre::sim_opts::SimOpts;
+use std::path::PathBuf;
 use std::thread;
 use std::time::Instant;
 use plotters::prelude::*;
@@ -11,6 +13,7 @@ fn export_results_plot(
     result: &racesim::post::race_result::RaceResult,
     track_length_m: f64,
     show_speed: bool,
+    averaged_n: Option<u32>,
 ) -> anyhow::Result<String> {
     let out_dir = std::path::Path::new("output");
     std::fs::create_dir_all(out_dir)?;
@@ -18,7 +21,11 @@ fn export_results_plot(
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    let filename = format!("race_plot_{}.png", ts);
+    let filename = if let Some(n) = averaged_n {
+        format!("race_plot_avg_{}_{}.png", n, ts)
+    } else {
+        format!("race_plot_{}.png", ts)
+    };
     let out_path = out_dir.join(filename);
 
     let mut y_min = f64::INFINITY;
@@ -40,11 +47,15 @@ fn export_results_plot(
 
     let root = BitMapBackend::new(out_path.to_str().unwrap(), (1280, 720)).into_drawing_area();
     root.fill(&WHITE)?;
+    let title_base = if show_speed { "Średnia prędkość na okrążeniach" } else { "Czas okrążenia" };
+    let title = if let Some(n) = averaged_n {
+        format!("{} (uśrednione z {} prób)", title_base, n)
+    } else {
+        title_base.to_string()
+    };
+
     let mut chart = ChartBuilder::on(&root)
-        .caption(
-            if show_speed { "Średnia prędkość na okrążeniach" } else { "Czas okrążenia" },
-            ("sans-serif", 24).into_font(),
-        )
+        .caption(title, ("sans-serif", 24).into_font())
         .margin(20)
         .x_label_area_size(40)
         .y_label_area_size(60)
@@ -110,6 +121,57 @@ fn export_results_plot(
     Ok(out_path.to_string_lossy().into_owned())
 }
 
+fn average_results(results: &[RaceResult]) -> RaceResult {
+    assert!(!results.is_empty(), "No results to average");
+
+    let base = &results[0];
+    let tot_no_laps = base.tot_no_laps as usize;
+    let n_cars = base.car_driver_pairs.len();
+
+    // Prepare accumulators
+    let mut avg_laptimes = vec![vec![0.0f64; tot_no_laps + 1]; n_cars];
+
+    // Average lap times per car, per lap, skipping invalids
+    for car_idx in 0..n_cars {
+        for lap in 1..=tot_no_laps {
+            let mut sum = 0.0f64;
+            let mut cnt = 0usize;
+            for run in results {
+                // Defensive: shape consistency
+                if car_idx >= run.laptimes.len() || lap >= run.laptimes[car_idx].len() {
+                    continue;
+                }
+                let t = run.laptimes[car_idx][lap];
+                if t.is_finite() && t > 0.0 {
+                    sum += t;
+                    cnt += 1;
+                }
+            }
+            avg_laptimes[car_idx][lap] = if cnt > 0 { sum / cnt as f64 } else { 0.0 };
+        }
+    }
+
+    // Build cumulative race times from averaged lap times
+    let mut avg_racetimes = vec![vec![0.0f64; tot_no_laps + 1]; n_cars];
+    for car_idx in 0..n_cars {
+        for lap in 1..=tot_no_laps {
+            let lt = avg_laptimes[car_idx][lap];
+            avg_racetimes[car_idx][lap] = avg_racetimes[car_idx][lap - 1] + lt.max(0.0);
+        }
+    }
+
+    RaceResult {
+        tot_no_laps: base.tot_no_laps,
+        car_driver_pairs: base.car_driver_pairs.clone(),
+        laptimes: avg_laptimes,
+        racetimes: avg_racetimes,
+        sc_active: false,
+        sc_position: 0.0,
+        weather_history: Vec::new(),
+        events: Vec::new(),
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     // PRE-PROCESSING ------------------------------------------------------------------------------
     // get simulation options from the command line arguments
@@ -131,33 +193,68 @@ fn main() -> anyhow::Result<()> {
 
     // EXECUTION -----------------------------------------------------------------------------------
     if !sim_opts.gui {
-        // NON-GUI CASE - prosta symulacja bez wizualizacji
-        println!("INFO: Running simulation without GUI...");
-        let t_start = Instant::now();
+        // NON-GUI CASE - Monte Carlo (multi-run) or single-run if no_sim_runs == 1
+        let runs = sim_opts.no_sim_runs.max(1);
+        if runs == 1 {
+            println!("INFO: Running single simulation without GUI...");
+            let t_start = Instant::now();
 
-        let race_result = racesim::core::handle_race::handle_race(
-            &sim_pars,
-            sim_opts.timestep_size,
-            sim_opts.debug,
-            None,
-            1.0,
-        )?;
+            let race_result = racesim::core::handle_race::handle_race(
+                &sim_pars,
+                sim_opts.timestep_size,
+                sim_opts.debug,
+                None,
+                1.0,
+                true,
+            )?;
 
-        println!(
-            "INFO: Execution time: {}ms",
-            t_start.elapsed().as_millis()
-        );
+            println!("INFO: Execution time: {}ms", t_start.elapsed().as_millis());
 
-        // Zapisz wyniki do pliku zamiast wypisywać na konsolę
-        match race_result.write_lap_and_race_times_to_file(None) {
-            Ok(path) => println!("INFO: Wyniki zapisane: {}", path),
-            Err(e) => eprintln!("WARNING: Nie udało się zapisać wyników: {}", e),
-        }
+            match race_result.write_lap_and_race_times_to_file(None) {
+                Ok(path) => println!("INFO: Wyniki zapisane: {}", path),
+                Err(e) => eprintln!("WARNING: Nie udało się zapisać wyników: {}", e),
+            }
 
-        // Zapisz wykres wyników do PNG
-        match export_results_plot(&race_result, sim_pars.track_pars.length, false) {
-            Ok(path) => println!("INFO: Wykres zapisany: {}", path),
-            Err(e) => eprintln!("WARNING: Nie udało się zapisać wykresu: {}", e),
+            match export_results_plot(&race_result, sim_pars.track_pars.length, false, None) {
+                Ok(path) => println!("INFO: Wykres zapisany: {}", path),
+                Err(e) => eprintln!("WARNING: Nie udało się zapisać wykresu: {}", e),
+            }
+        } else {
+            println!("INFO: Running {} simulations for averaging...", runs);
+            let t_start_total = Instant::now();
+            let mut results: Vec<RaceResult> = Vec::with_capacity(runs as usize);
+
+            for i in 0..runs {
+                println!("INFO: Simulating run {}/{}", i + 1, runs);
+                let res = racesim::core::handle_race::handle_race(
+                    &sim_pars,
+                    sim_opts.timestep_size,
+                    false, // suppress per-run debug for speed; use --debug with single run
+                    None,
+                    1.0,
+                    false, // suppress event prints in multi-run
+                )?;
+                results.push(res);
+            }
+
+            let averaged = average_results(&results);
+            println!("INFO: All runs done in {}ms", t_start_total.elapsed().as_millis());
+
+            // Save averaged results to a dedicated file
+            let mut out_path = PathBuf::new();
+            out_path.push("output");
+            std::fs::create_dir_all(&out_path)?;
+            out_path.push("last_run_averaged.txt");
+
+            match averaged.write_lap_and_race_times_to_file(Some(&out_path)) {
+                Ok(path) => println!("INFO: Averaged results saved: {}", path),
+                Err(e) => eprintln!("WARNING: Could not save averaged results: {}", e),
+            }
+
+            match export_results_plot(&averaged, sim_pars.track_pars.length, false, Some(runs)) {
+                Ok(path) => println!("INFO: Averaged plot saved: {}", path),
+                Err(e) => eprintln!("WARNING: Could not save averaged plot: {}", e),
+            }
         }
     } else {
         // GUI CASE - symulacja w czasie rzeczywistym z wizualizacją
@@ -177,6 +274,7 @@ fn main() -> anyhow::Result<()> {
                 false, // debug wyłączony w GUI
                 Some(&tx),
                 sim_opts_thread.realtime_factor,
+                false, // suppress event prints in GUI
             )
         });
 

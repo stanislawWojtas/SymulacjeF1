@@ -16,6 +16,7 @@ pub fn handle_race(
     print_debug: bool,
     tx: Option<&Sender<RaceState>>,
     realtime_factor: f64,
+    print_events: bool,
 ) -> anyhow::Result<RaceResult> {
     // create the race
     let mut race = Race::new(
@@ -25,6 +26,9 @@ pub fn handle_race(
         &sim_pars.car_pars_all,
         timestep_size,
     );
+
+    // control verbosity for internal race events
+    race.print_events = print_events;
 
     // check if sender was inserted -> in that case use real-time simulation for GUI
     let sim_realtime = tx.is_some();

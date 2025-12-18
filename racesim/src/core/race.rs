@@ -94,6 +94,7 @@ pub struct Race {
     pub sc_timer: f64,
     pub timestep_size: f64,
     pub weather_state: WeatherState,
+    pub print_events: bool,
     rain_probability: f64,
     min_weather_duration_s: f64,
     last_weather_change: f64,
@@ -150,11 +151,7 @@ impl Race {
         }
 
         // Debug: list available driver initials
-        #[cfg(debug_assertions)]
-        {
-            let keys: Vec<String> = drivers_by_initials.keys().cloned().collect();
-            println!("Available drivers: {:?}", keys);
-        }
+        // debug listing removed to avoid noisy output in multi-run scenarios
 
         // create cars
         let no_cars = race_pars.participants.len();
@@ -200,6 +197,7 @@ impl Race {
             timestep_size,
             cur_racetime: 0.0,
             weather_state: start_weather,
+            print_events: true,
             rain_probability: race_pars.rain_probability,
             min_weather_duration_s: race_pars.min_weather_duration_s,
             last_weather_change: 0.0,
@@ -276,7 +274,7 @@ impl Race {
             if rng.gen::<f64>() < p_step {
                 self.weather_state = match self.weather_state {
                     WeatherState::Dry => {
-                        println!("WEATHER CHANGE: Rain started at {:.2}s!", self.cur_racetime);
+                        if self.print_events { println!("WEATHER CHANGE: Rain started at {:.2}s!", self.cur_racetime); }
                         self.last_weather_change = self.cur_racetime;
                         // event: rain start
                         self.events.push(RaceEvent {
@@ -301,7 +299,7 @@ impl Race {
                         WeatherState::Rain
                     },
                     WeatherState::Rain => {
-                        println!("WEATHER CHANGE: Rain stopped at {:.2}s!", self.cur_racetime);
+                        if self.print_events { println!("WEATHER CHANGE: Rain stopped at {:.2}s!", self.cur_racetime); }
                         self.last_weather_change = self.cur_racetime;
                         // event: dry start
                         self.events.push(RaceEvent {
@@ -382,7 +380,7 @@ impl Race {
             }
 
             if self.sc_timer.is_finite() && self.sc_timer <= 0.00 {
-                println!("SAFETY CAR IN THIS LAP - RACE RESUMING");
+                if self.print_events { println!("SAFETY CAR IN THIS LAP - RACE RESUMING"); }
                 self.flag_state = FlagState::G;
                 self.safety_car.active = false;
                 // event: SC in
@@ -404,7 +402,7 @@ impl Race {
                 if car.status == CarStatus::DNF && !self.race_finished[i] && !self.sc_triggers[i] {
                      // Tutaj prosta logika: jak ktoś ma DNF i nie dojechał do mety (czyli rozbił się), wywołaj SC.
                      // W pełnej wersji trzeba by sprawdzać czy ten DNF nastąpił *teraz*.
-                    println!("SAFETY CAR DEPLOYED (Caused by car #{})", car.car_no);
+                    if self.print_events { println!("SAFETY CAR DEPLOYED (Caused by car #{})", car.car_no); }
                     self.flag_state = FlagState::Sc;
                     // Tryb dynamiczny: odjazd po ustawieniu kolejki kierowców
                     self.sc_timer = f64::INFINITY; // włącz licznik dopiero po lineup
@@ -743,18 +741,18 @@ impl Race {
                     if rng.gen::<f64>() < mistake_prob {
                         if rng.gen::<bool>() {
                             // Lock-up: strata czasu + dodatkowe zużycie opon
-                            println!(
+                            if self.print_events { println!(
                                 "MISTAKE: Car {} locked up under pressure!",
                                 self.cars_list[idx_front].car_no
-                            );
+                            ); }
                             self.cur_laptimes[idx_front] += 1.2;
                             self.cars_list[idx_front].dirty_air_wear_factor += 2.0;
                         } else {
                             // Wyjazd szeroko: strata u broniącego, mały zysk atakującego
-                            println!(
+                            if self.print_events { println!(
                                 "MISTAKE: Car {} went wide!",
                                 self.cars_list[idx_front].car_no
-                            );
+                            ); }
                             self.cur_laptimes[idx_front] += 0.8;
                             self.cur_laptimes[idx_rear] -= 0.3;
                         }
@@ -767,11 +765,11 @@ impl Race {
                         let contact_prob = 0.005 * agg_factor; // niewielka szansa
 
                         if rng.gen::<f64>() < contact_prob {
-                            println!(
+                            if self.print_events { println!(
                                 "CONTACT: Minor contact between #{} and #{}",
                                 self.cars_list[idx_front].car_no,
                                 self.cars_list[idx_rear].car_no
-                            );
+                            ); }
                             // Częściej obrywa atakujący (z tyłu)
                             let victim_idx = if rng.gen::<f64>() > 0.3 { idx_rear } else { idx_front };
                             self.cars_list[victim_idx].accumulated_damage_penalty += 0.3;
@@ -811,11 +809,11 @@ impl Race {
                             // Reflect immediate removal from pace this step
                             self.cur_laptimes[idx_front] = f64::INFINITY;
                             self.cur_laptimes[idx_rear] = f64::INFINITY;
-                            println!(
+                            if self.print_events { println!(
                                 "CRASH: Car {} and Car {} collided in Turn!",
                                 self.cars_list[idx_front].car_no,
                                 self.cars_list[idx_rear].car_no
-                            );
+                            ); }
                             // event: crash
                             self.events.push(RaceEvent {
                                 kind: "Crash".to_string(),
@@ -979,7 +977,7 @@ impl Race {
 
                 // Track potential engine failure event
                 let prev_status = car.status.clone();
-                car.drive_lap(self.cur_laptimes[i], self.failure_rate_per_hour);
+                car.drive_lap(self.cur_laptimes[i], self.failure_rate_per_hour, self.print_events);
                 if prev_status != car.status && car.status == CarStatus::DNF {
                     // Log as an EngineFailure event (treated as crash on plots)
                     self.events.push(RaceEvent {

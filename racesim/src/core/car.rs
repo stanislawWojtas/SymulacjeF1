@@ -108,13 +108,14 @@ impl Car {
         let tire_loss = self.tireset.t_add_tireset(&degr_pars);
 
         let mut weather_penalty = 0.0;
-        let compound = self.tireset.compound.as_str();
+        let compound = self.tireset.compound.to_uppercase();
+        let compound_str = compound.as_str();
 
         if is_wet {
             // Bazowe spowolnienie mokrego toru
             let wet_track_base_penalty = 12.0;
 
-            weather_penalty = match compound {
+            weather_penalty = match compound_str {
                 // Slicki: baza + bardzo duża kara
                 "SOFT" | "MEDIUM" | "HARD" => wet_track_base_penalty + 30.0,
                 // Intery: tylko baza
@@ -125,7 +126,7 @@ impl Car {
             };
         } else {
             // Sucho: deszczowe opony są wyraźnie wolniejsze
-            if compound == "INTERMEDIATE" || compound == "WET" {
+            if compound_str == "INTERMEDIATE" || compound_str == "WET" {
                 weather_penalty = 5.0;
             }
         }
@@ -140,7 +141,7 @@ impl Car {
 
     /// Metoda zwiększa wiek opon.
     /// Usunięto spalanie paliwa.
-    pub fn drive_lap(&mut self, lap_time_s: f64, failure_rate_per_hour: f64) {
+    pub fn drive_lap(&mut self, lap_time_s: f64, failure_rate_per_hour: f64, print_events: bool) {
 
         //obsługa awarii
         if (self.status == CarStatus::DNF){
@@ -154,7 +155,12 @@ impl Car {
             let p_fail = 1.0 - (-lambda * lap_time_s).exp();
             if rng.gen::<f64>() < p_fail {
                 self.status = CarStatus::DNF;
-                println!("CRASH: Car {} has retired from the race due to engine failure", self.car_no)
+                if print_events {
+                    println!(
+                        "CRASH: Car {} has retired from the race due to engine failure",
+                        self.car_no
+                    );
+                }
             }
         }
 
@@ -196,8 +202,9 @@ impl Car {
                     strategy_entry.compound.to_owned(),
                     strategy_entry.tire_start_age,
                 );
-                match self.tireset.compound.as_str() {
-                    "Soft" | "Medium" | "Hard" => {
+                // Standaryzuj rozpoznawanie slicków do UPPERCASE
+                match self.tireset.compound.to_uppercase().as_str() {
+                    "SOFT" | "MEDIUM" | "HARD" => {
                         self.last_slick_compound = Some(self.tireset.compound.to_owned());
                     },
                     _ => {},

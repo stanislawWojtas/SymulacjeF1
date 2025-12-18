@@ -60,25 +60,32 @@ impl Tireset {
         // powoduje wyraźnie większą stratę tempa.
         let age = self.age_cur_stint;
 
-        // Globalne skalowanie k_1 dla różnych mieszanek + domyślny 'cliff'
-        let (k1_scale, default_cliff_age, default_k2) = match self.compound.as_str() {
-            "SOFT" => (1.2, 12.0, 0.030),
-            "MEDIUM" => (1.4, 24.0, 0.020),
-            "HARD" => (1.5, 34.0, 0.015),
-            _ => (1.0, f64::INFINITY, 0.0),
+        // Globalne skalowanie k_1 dla różnych mieszanek + domyślny 'cliff' i bazowy offset tempa
+        // Uwaga: base_offset jest ujemny dla szybszych mieszanek (zysk czasu na świeżym komplecie)
+        // Rekomendacje dla Monzy: SOFT ~15 okr., MEDIUM ~28 okr., HARD ~45 okr.
+        // Degradacja: SOFT x1.8, MEDIUM x1.0, HARD x0.5
+        // Cliff ostrość (k2): SOFT 0.050, MEDIUM 0.020, HARD 0.010
+        // Bazowe offsety: SOFT -1.0s, MEDIUM -0.5s, HARD 0.0s
+        let (k1_scale, default_cliff_age, default_k2, base_offset) = match self.compound.to_uppercase().as_str() {
+            "SOFT" => (1.8, 15.0, 0.050, -1.0),
+            "MEDIUM" => (1.0, 28.0, 0.020, -0.5),
+            "HARD" => (0.5, 45.0, 0.010, 0.0),
+            _ => (1.0, f64::INFINITY, 0.0, 0.0),
         };
 
         // Pozostał tylko model liniowy
         match degr_pars.degr_model {
             DegrModel::Lin => {
                 // Wersja liniowa z dodatkowym domyślnym cliffem po długim stincie
-                let base = degr_pars.k_0 + (degr_pars.k_1_lin * k1_scale) * age;
-                if age > default_cliff_age {
+                // Wynik: bazowy offset mieszanki + (k_0 + k_1 * age) + ewentualny cliff
+                let linear_degr = degr_pars.k_0 + (degr_pars.k_1_lin * k1_scale) * age;
+                let cliff_penalty = if age > default_cliff_age {
                     let over = age - default_cliff_age;
-                    base + (default_k2 * over.powf(2.0)).min(MAX_TIRE_PENALTY)
+                    (default_k2 * over.powf(2.0)).min(MAX_TIRE_PENALTY)
                 } else {
-                    base
-                }
+                    0.0
+                };
+                base_offset + linear_degr + cliff_penalty
             },
 
             DegrModel::NonlinWithCliff => {
@@ -92,7 +99,8 @@ impl Tireset {
                     let cliff_penalty = k_2* over_cliff.powf(2.0);
                     degradation += cliff_penalty.min(MAX_TIRE_PENALTY);
                 }
-                degradation
+                // Dodaj bazowy offset mieszanki również dla modelu nieliniowego
+                base_offset + degradation
             }
         }
     }
