@@ -1,4 +1,5 @@
 use std::fmt::Write;
+use std::io::Write as IoWrite;
 
 use serde::{Serialize, Deserialize};
 
@@ -24,6 +25,79 @@ pub struct RaceResult {
 }
 
 impl RaceResult {
+    /// write_lap_and_race_times_to_file writes lap and race times to a text file in output/.
+    /// Returns the path to the written file.
+    pub fn write_lap_and_race_times_to_file(
+        &self,
+        path: Option<&std::path::Path>,
+    ) -> anyhow::Result<String> {
+        // Prepare content strings identical to console format
+        let mut tmp_string_laptime = String::new();
+        let mut tmp_string_racetime = String::new();
+
+        for lap in 1..self.tot_no_laps as usize + 1 {
+            write!(&mut tmp_string_laptime, "{:3}, ", lap)?;
+            write!(&mut tmp_string_racetime, "{:3}, ", lap)?;
+
+            for i in 0..self.car_driver_pairs.len() {
+                if i < self.car_driver_pairs.len() - 1 {
+                    write!(&mut tmp_string_laptime, "{:8.3}s, ", self.laptimes[i][lap])?;
+                    write!(
+                        &mut tmp_string_racetime,
+                        "{:8.3}s, ",
+                        self.racetimes[i][lap]
+                    )?;
+                } else {
+                    writeln!(&mut tmp_string_laptime, "{:8.3}s", self.laptimes[i][lap])?;
+                    writeln!(&mut tmp_string_racetime, "{:8.3}s", self.racetimes[i][lap])?;
+                }
+            }
+        }
+
+        let mut tmp_string_car_driver_info = String::from("lap, ");
+        for (i, car_driver_pair) in self.car_driver_pairs.iter().enumerate() {
+            if i < self.car_driver_pairs.len() - 1 {
+                write!(
+                    &mut tmp_string_car_driver_info,
+                    "{:3} ({}), ",
+                    car_driver_pair.car_no, car_driver_pair.driver_initials
+                )?;
+            } else {
+                write!(
+                    &mut tmp_string_car_driver_info,
+                    "{:3} ({})",
+                    car_driver_pair.car_no, car_driver_pair.driver_initials
+                )?;
+            }
+        }
+
+        let mut content = String::new();
+        writeln!(&mut content, "RESULT: Lap times")?;
+        writeln!(&mut content, "{}", tmp_string_car_driver_info)?;
+        writeln!(&mut content, "{}", tmp_string_laptime)?;
+        writeln!(&mut content, "RESULT: Race times")?;
+        writeln!(&mut content, "{}", tmp_string_car_driver_info)?;
+        writeln!(&mut content, "{}", tmp_string_racetime)?;
+
+        // Ensure output directory exists
+        let out_dir = std::path::Path::new("output");
+        std::fs::create_dir_all(out_dir)?;
+
+        // Resolve file path (default to output/last_run.txt)
+        let out_path = if let Some(p) = path { p.to_path_buf() } else { out_dir.join("last_run.txt") };
+
+        // Write file
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(true)
+            .write(true)
+            .open(&out_path)?;
+        file.write_all(content.as_bytes())?;
+        file.flush()?;
+
+        Ok(out_path.to_string_lossy().into_owned())
+    }
+
     /// print_lap_and_race_times prints the resulting lap and race times to the console output.
     pub fn print_lap_and_race_times(&self) {
         // create string for lap times and race times

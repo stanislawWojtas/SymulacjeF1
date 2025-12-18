@@ -68,6 +68,7 @@ pub struct Car {
     tireset: Tireset,
     pub dirty_air_wear_factor: f64,
     pub last_slick_compound: Option<String>,
+    pub accumulated_damage_penalty: f64,
 
 }
 
@@ -94,42 +95,38 @@ impl Car {
             ),
             dirty_air_wear_factor: 1.0,
             last_slick_compound: match car_pars.strategy[0].compound.as_str() {
-                "Soft" | "Medium" | "Hard" => Some(car_pars.strategy[0].compound.to_owned()),
+                "SOFT" | "MEDIUM" | "HARD" => Some(car_pars.strategy[0].compound.to_owned()),
                 _ => None,
             },
+            accumulated_damage_penalty: 0.0,
         }
     }
 
 
-    pub fn calc_basic_timeloss(&self, s_mass: f64, is_wet: bool) -> f64 { // _s_mass jest ignorowane
+    pub fn calc_basic_timeloss(&self, s_mass: f64, is_wet: bool) -> f64 {
         let degr_pars = self.driver.get_degr_pars(&self.tireset.compound);
         let tire_loss = self.tireset.t_add_tireset(&degr_pars);
-        
-        // Pogoda
+
         let mut weather_penalty = 0.0;
         let compound = self.tireset.compound.as_str();
 
         if is_wet {
-            match compound {
-                "Soft" | "Medium" | "Hard" => {
-                    weather_penalty = 20.0;
-                },
-                "Intermediate" => {
-                    //opony przejściowe -> brak kary
-                    weather_penalty = 0.0;
-                },
-                "Wet" => {
-                    weather_penalty = 2.0;
-                },
-                _ => {
-                    // inne mieszanki -> brak dodatkowej kary
-                    weather_penalty = 0.0;
-                }
-            }
+            // Bazowe spowolnienie mokrego toru
+            let wet_track_base_penalty = 12.0;
+
+            weather_penalty = match compound {
+                // Slicki: baza + bardzo duża kara
+                "SOFT" | "MEDIUM" | "HARD" => wet_track_base_penalty + 30.0,
+                // Intery: tylko baza
+                "INTERMEDIATE" => wet_track_base_penalty,
+                // Wety: baza + niewielka kara
+                "WET" => wet_track_base_penalty + 2.0,
+                _ => wet_track_base_penalty,
+            };
         } else {
-            //jesli sucho
-            if compound == "Intermediate" || compound == "Wet"{
-                weather_penalty = 5.0; //duża kara za nieodpowiednie opony
+            // Sucho: deszczowe opony są wyraźnie wolniejsze
+            if compound == "INTERMEDIATE" || compound == "WET" {
+                weather_penalty = 5.0;
             }
         }
 
@@ -138,6 +135,7 @@ impl Car {
             + tire_loss
             + self.m_fuel * s_mass
             + weather_penalty
+            + self.accumulated_damage_penalty
     }
 
     /// Metoda zwiększa wiek opon.
@@ -160,8 +158,11 @@ impl Car {
             }
         }
 
-        // W nowoczesnym F1 brak tankowania w wyścigu – nie modelujemy spalania paliwa.
-        // Pozostawiamy masę paliwa stałą, aby uniknąć ostrzeżeń i nienaturalnych efektów.
+        // Spalanie paliwa: zmniejsz masę paliwa o zużycie na okrążenie.
+        // (Brak tankowania w wyścigu w F1 – jedynie ubywa paliwa.)
+        if self.m_fuel > 0.0 {
+            self.m_fuel = (self.m_fuel - self.b_fuel_per_lap).max(0.0);
+        }
 
         self.tireset.drive_lap(self.dirty_air_wear_factor);
 

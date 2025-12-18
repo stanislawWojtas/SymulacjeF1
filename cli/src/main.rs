@@ -91,7 +91,7 @@ fn export_results_plot(
         let (color, width) = match ev.kind.as_str() {
             "WeatherRainStart" | "WeatherDryStart" => (RGBColor(150, 150, 150), 1),
             "SC_DEPLOYED" | "SC_IN" => (RGBColor(255, 165, 0), 1),
-            "Crash" => (RED, 2),
+            "Crash" | "EngineFailure" => (RED, 2),
             _ => (BLACK, 1),
         };
         chart.draw_series(std::iter::once(PathElement::new(
@@ -148,8 +148,11 @@ fn main() -> anyhow::Result<()> {
             t_start.elapsed().as_millis()
         );
 
-        // Wyświetl wyniki
-        race_result.print_lap_and_race_times();
+        // Zapisz wyniki do pliku zamiast wypisywać na konsolę
+        match race_result.write_lap_and_race_times_to_file(None) {
+            Ok(path) => println!("INFO: Wyniki zapisane: {}", path),
+            Err(e) => eprintln!("WARNING: Nie udało się zapisać wyników: {}", e),
+        }
 
         // Zapisz wykres wyników do PNG
         match export_results_plot(&race_result, sim_pars.track_pars.length, false) {

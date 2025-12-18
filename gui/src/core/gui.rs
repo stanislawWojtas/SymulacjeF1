@@ -186,7 +186,7 @@ impl RacePlot {
             let (color, width) = match ev.kind.as_str() {
                 "WeatherRainStart" | "WeatherDryStart" => (RGBColor(150, 150, 150), 1),
                 "SC_DEPLOYED" | "SC_IN" => (RGBColor(255, 165, 0), 1),
-                "Crash" => (RED, 2),
+                "Crash" | "EngineFailure" => (RED, 2),
                 _ => (BLACK, 1),
             };
             chart.draw_series(std::iter::once(PathElement::new(

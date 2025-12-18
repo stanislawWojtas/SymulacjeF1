@@ -22,7 +22,7 @@ use rand::Rng; // bring Rng trait into scope for thread_rng().gen::<T>()
 /// * `participants` - Lista uczestników
 fn default_initial_weather() -> String { "Dry".to_string() }
 fn default_rain_probability() -> f64 { 0.0 }
-fn default_min_weather_duration_s() -> f64 { 60.0 }
+fn default_min_weather_duration_s() -> f64 { 200.0 }
 fn default_fuel_margin() -> f64 { 0.05 }
 fn default_failure_rate_per_hour() -> f64 { 0.02 }
 fn default_collision_factor() -> f64 { 20.0 }
@@ -290,10 +290,10 @@ impl Race {
                             if car.status == CarStatus::DNF { continue; }
                             let comp = car.get_current_compound();
                             match comp {
-                                "Soft" | "Medium" | "Hard" => {
+                                "SOFT" | "MEDIUM" | "HARD" => {
                                     car.last_slick_compound = Some(comp.to_owned());
                                     let target_lap = car.sh.get_compl_lap() + 1;
-                                    car.schedule_weather_strategy(target_lap, "Intermediate");
+                                    car.schedule_weather_strategy(target_lap, "INTERMEDIATE");
                                 },
                                 _ => {},
                             }
@@ -314,13 +314,13 @@ impl Race {
                         for (i, car) in self.cars_list.iter_mut().enumerate() {
                             if car.status == CarStatus::DNF { continue; }
                             let comp = car.get_current_compound();
-                            let target_slick = car.last_slick_compound.clone().unwrap_or_else(|| "Medium".to_string());
+                            let target_slick = car.last_slick_compound.clone().unwrap_or_else(|| "MEDIUM".to_string());
                             match comp {
-                                "Intermediate" => {
+                                "INTERMEDIATE" => {
                                     let target_lap = car.sh.get_compl_lap() + 1;
                                     car.schedule_weather_strategy(target_lap, &target_slick);
                                 },
-                                "Wet" => {
+                                "WET" => {
                                     let target_lap = car.sh.get_compl_lap() + 2;
                                     car.schedule_weather_strategy(target_lap, &target_slick);
                                 },
@@ -727,6 +727,58 @@ impl Race {
                 let idx_rear = pair_idxs[1];
                 let delta_t_proj = self.calc_projected_delta_t(idx_front, idx_rear, self.timestep_size);
 
+                // --- PRESJA/BŁĘDY I DROBNE KONTAKTY (gdy auta są blisko) ---
+                let gap_time_close = self.calc_projected_delta_t(idx_front, idx_rear, 0.0);
+                if gap_time_close < 1.0
+                    && !self.cars_list[idx_front].sh.pit_act
+                    && !self.cars_list[idx_rear].sh.pit_act
+                {
+                    let mut rng = rand::thread_rng();
+
+                    // 1) Presja i błędy kierowcy z przodu (lock-up lub wyjazd szeroko)
+                    let pressure_intensity = (1.0 - gap_time_close).clamp(0.0, 1.0);
+                    let defender_consistency = self.cars_list[idx_front].driver.consistency;
+                    let mistake_prob = (1.0 - defender_consistency) * pressure_intensity * 0.05;
+
+                    if rng.gen::<f64>() < mistake_prob {
+                        if rng.gen::<bool>() {
+                            // Lock-up: strata czasu + dodatkowe zużycie opon
+                            println!(
+                                "MISTAKE: Car {} locked up under pressure!",
+                                self.cars_list[idx_front].car_no
+                            );
+                            self.cur_laptimes[idx_front] += 1.2;
+                            self.cars_list[idx_front].dirty_air_wear_factor += 2.0;
+                        } else {
+                            // Wyjazd szeroko: strata u broniącego, mały zysk atakującego
+                            println!(
+                                "MISTAKE: Car {} went wide!",
+                                self.cars_list[idx_front].car_no
+                            );
+                            self.cur_laptimes[idx_front] += 0.8;
+                            self.cur_laptimes[idx_rear] -= 0.3;
+                        }
+                    }
+
+                    // 2) Drobny kontakt i uszkodzenia (bez DNF)
+                    if gap_time_close < 0.3 {
+                        let agg_factor = self.cars_list[idx_front].driver.aggression
+                            + self.cars_list[idx_rear].driver.aggression;
+                        let contact_prob = 0.005 * agg_factor; // niewielka szansa
+
+                        if rng.gen::<f64>() < contact_prob {
+                            println!(
+                                "CONTACT: Minor contact between #{} and #{}",
+                                self.cars_list[idx_front].car_no,
+                                self.cars_list[idx_rear].car_no
+                            );
+                            // Częściej obrywa atakujący (z tyłu)
+                            let victim_idx = if rng.gen::<f64>() > 0.3 { idx_rear } else { idx_front };
+                            self.cars_list[victim_idx].accumulated_damage_penalty += 0.3;
+                        }
+                    }
+                }
+
                 if !self.cars_list[idx_front].sh.pit_act && delta_t_proj < self.min_t_dist {
                     // --- NEW: Collision logic for very close fights ---
                     let proximity_threshold = 0.3; // s (bardziej restrykcyjnie)
@@ -925,7 +977,18 @@ impl Race {
                     self.race_finished[i] = true
                 }
 
+                // Track potential engine failure event
+                let prev_status = car.status.clone();
                 car.drive_lap(self.cur_laptimes[i], self.failure_rate_per_hour);
+                if prev_status != car.status && car.status == CarStatus::DNF {
+                    // Log as an EngineFailure event (treated as crash on plots)
+                    self.events.push(RaceEvent {
+                        kind: "EngineFailure".to_string(),
+                        lap: self.cur_lap_leader, // current leader's lap after crossing
+                        time_s: self.cur_racetime,
+                        cars: vec![car.car_no],
+                    });
+                }
 
                 // update theoretical lap time
                 self.calc_th_laptime(i);
