@@ -1,0 +1,21 @@
+{
+  "name": "Monza",
+  "length": 5793.0,
+  "t_q": 80.0,
+  "t_loss_firstlap": 4.0,
+  "pit_speedlimit": 22.2,
+  "t_gap_racepace": 3.0,
+  "s_mass": 0.08,
+  "t_drseffect": -0.6,
+  "turn_1": 300.0,
+  "d_first_gridpos": 100.0,
+  "d_per_gridpos": 8.0,
+  "real_length_pit_zone": 320.0,
+  "s12": 2000.0,
+  "s23": 4000.0,
+  "pit_zone": [5600.0, 100.0],
+  "drs_measurement_points": [2000.0, 4000.0],
+  "overtaking_zones": [[2000.0, 2500.0], [4000.0, 4500.0]],
+  "corners": [[900.0, 1020.0], [2100.0, 2220.0], [2450.0, 2650.0], [2820.0, 2940.0], [3920.0, 4010.0], [4100.0, 4190.0], [5100.0, 5400.0]],
+  "pits_aft_finishline": true
+}

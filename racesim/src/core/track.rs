@@ -124,6 +124,21 @@ impl Track {
         }
     }
 
+    pub fn is_in_overtaking_zone(&self, s_track: f64) -> bool {
+        for zone in &self.overtaking_zones {
+            if zone[0] < zone[1]{
+                if s_track >= zone[0] && s_track <= zone[1]{
+                    return true;
+                }else{
+                    if s_track >= zone[0] || s_track <= zone[1] {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
     /// The method returns the approximate time loss when driving through the pit lane.
     pub fn get_pit_drive_timeloss(&self) -> f64 {
         let pit_zone_lap_frac = self.track_length_pit_zone / self.length;

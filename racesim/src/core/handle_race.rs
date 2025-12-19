@@ -1,4 +1,5 @@
-use crate::core::race::Race;
+use crate::core::race::{Race, WeatherState, SimConstants};
+use crate::core::tireset::TireConfig;
 use crate::interfaces::gui_interface::{CarState, RaceState, RgbColor, MAX_GUI_UPDATE_FREQUENCY};
 use crate::post::race_result::RaceResult;
 use crate::pre::read_sim_pars::SimPars;
@@ -12,19 +13,27 @@ use std::time::{Duration, Instant};
 /// the results for post-processing.
 pub fn handle_race(
     sim_pars: &SimPars,
+    sim_consts: &SimConstants,
+    tire_config: &TireConfig,
     timestep_size: f64,
     print_debug: bool,
     tx: Option<&Sender<RaceState>>,
     realtime_factor: f64,
+    print_events: bool,
 ) -> anyhow::Result<RaceResult> {
     // create the race
     let mut race = Race::new(
         &sim_pars.race_pars,
+        sim_consts,
+        tire_config,
         &sim_pars.track_pars,
         &sim_pars.driver_pars_all,
         &sim_pars.car_pars_all,
         timestep_size,
     );
+
+    // control verbosity for internal race events
+    race.print_events = print_events;
 
     // check if sender was inserted -> in that case use real-time simulation for GUI
     let sim_realtime = tx.is_some();
@@ -32,9 +41,26 @@ pub fn handle_race(
     // simulate the race -> execute simulation steps until race is finished for all cars
     if !sim_realtime {
         // NORMAL SIMULATION -----------------------------------------------------------------------
+        let mut t_race_update_print = 0.0;
+        let mut last_printed_lap = 0u32;
         while !race.get_all_finished() {
             // simulate time step
             race.simulate_timestep();
+
+            // Optional live progress printing in non-GUI mode when --debug is set
+            if print_debug && race.cur_racetime > t_race_update_print + 0.9999 {
+                println!(
+                    "INFO: Simulating... Current race time is {:.3}s, current lap is {}",
+                    race.cur_racetime, race.cur_lap_leader
+                );
+                t_race_update_print = race.cur_racetime;
+            }
+
+            // Print lap completion info as leader advances (coarse-grained)
+            if print_debug && race.cur_lap_leader > last_printed_lap {
+                println!("INFO: Leader started lap {}", race.cur_lap_leader);
+                last_printed_lap = race.cur_lap_leader;
+            }
         }
     } else {
         // REAL-TIME SIMULATION --------------------------------------------------------------------
@@ -70,6 +96,8 @@ pub fn handle_race(
                     flag_state: race.flag_state.to_owned(),
                     sc_active: race.safety_car.active,
                     sc_race_prog: sc_prog,
+                    weather_is_rain: matches!(race.weather_state, WeatherState::Rain),
+                    final_result: None,
                 };
 
                 for (i, car) in race.cars_list.iter().enumerate() {
@@ -116,6 +144,20 @@ pub fn handle_race(
             } else {
                 println!("WARNING: Could not keep up with real-time!")
             }
+        }
+
+        // after real-time loop finishes, send final result once
+        if let Some(tx) = tx {
+            let result = race.get_race_result();
+            let final_msg = RaceState {
+                car_states: Vec::new(),
+                flag_state: race.flag_state.to_owned(),
+                sc_active: result.sc_active,
+                sc_race_prog: if result.sc_active { result.sc_position / race.track.length } else { 0.0 },
+                weather_is_rain: matches!(race.weather_state, WeatherState::Rain),
+                final_result: Some(result),
+            };
+            tx.send(final_msg).context("Failed to send final race result to GUI!")?;
         }
     }
 

@@ -1,0 +1,7 @@
+{
+  "soft": { "k1_scale": 1.8, "default_cliff_age": 15.0, "default_k2": 0.050, "base_offset": -1.0 },
+  "medium": { "k1_scale": 1.0, "default_cliff_age": 28.0, "default_k2": 0.020, "base_offset": -0.5 },
+  "hard": { "k1_scale": 0.5, "default_cliff_age": 45.0, "default_k2": 0.010, "base_offset": 0.0 },
+  "intermediate": { "k1_scale": 1.2, "default_cliff_age": 25.0, "default_k2": 0.030, "base_offset": 0.2 },
+  "wet": { "k1_scale": 1.5, "default_cliff_age": 20.0, "default_k2": 0.040, "base_offset": 0.8 }
+}
