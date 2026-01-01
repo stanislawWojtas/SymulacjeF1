@@ -1,4 +1,3 @@
-use crate::core::car;
 use crate::core::driver::Driver;
 use crate::core::state_handler::StateHandler;
 use crate::core::tireset::{Tireset, TireConfig};
@@ -18,7 +17,6 @@ pub struct StrategyEntry {
     pub tire_start_age: u32,
     pub compound: String,
     pub driver_initials: String, // Przywrócone na potrzeby inicjalizacji
-    pub refuel_mass: f64,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -41,7 +39,6 @@ pub struct CarPars {
     pub t_car: f64, // referencyjny czas okrążenia bolidu (bazowy performance)
     pub b_fuel_per_lap: f64, // zużycie paliwa na okrążenie (fuel/lap)
     pub m_fuel: f64, // aktualna masa/ilość paliwa (kg)
-    pub t_pit_refuel_per_kg: Option<f64>, // (Opcjonalny) - współczynnik czasu tankowania na jednostke paliwa
     pub t_pit_tirechange: f64, // czas samej wymiany opon w boksie
     //pub t_pit_driverchange: Option<f64>, // (Opcjonalny) - czas samej zmiany kierowcy w boksie, jeśli bez zmiany to none
     pub pit_location: f64, // Pozycja pit stopu na torze (metry)
@@ -58,7 +55,6 @@ pub struct Car {
     t_car: f64,
     m_fuel: f64,              
     b_fuel_per_lap: f64,  
-    t_pit_refuel_per_kg: Option<f64>,
     t_pit_tirechange: f64,
     pub pit_location: f64,
     strategy: Vec<StrategyEntry>,
@@ -82,7 +78,6 @@ impl Car {
             t_car: car_pars.t_car,
             m_fuel: car_pars.m_fuel,
             b_fuel_per_lap: car_pars.b_fuel_per_lap, 
-            t_pit_refuel_per_kg: car_pars.t_pit_refuel_per_kg, 
             t_pit_tirechange: car_pars.t_pit_tirechange,
             pit_location: car_pars.pit_location,
             strategy: car_pars.strategy.to_owned(),
@@ -215,10 +210,7 @@ impl Car {
             // Pozostawiamy bieżący zestaw opon bez zmian.
         }
         
-        // Refueling logic removed
-        // if strategy_entry.refuel_mass > 0.0 {
-        //     self.m_fuel += strategy_entry.refuel_mass;
-        // }
+        // Tankowanie usunięte – brak modyfikacji m_fuel w pit stopie
 
         
     }
@@ -240,11 +232,7 @@ impl Car {
             0.0
         };
 
-        // Refueling time calculation removed
-        // if strategy_entry.refuel_mass > 0.0 {
-        //      let t_refuel = strategy_entry.refuel_mass * self.t_pit_refuel_per_kg.unwrap_or(0.0);
-        //      t_standstill = t_standstill.max(t_refuel);
-        // }
+        // Tankowanie usunięte – brak dodatkowego czasu za tankowanie
 
         t_standstill
     }
@@ -262,7 +250,6 @@ impl Car {
                 tire_start_age: 0,
                 compound: compound.to_owned(),
                 driver_initials: String::new(),
-                refuel_mass: 0.0,
             });
         }
     }
