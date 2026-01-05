@@ -509,8 +509,38 @@ impl Race {
                 continue;
             }
 
-            // Startujemy od teoretycznego czasu (fizyka)
-            self.cur_laptimes[i] = self.cur_th_laptimes[i];
+            // // Startujemy od teoretycznego czasu (fizyka)
+            // self.cur_laptimes[i] = self.cur_th_laptimes[i];
+
+            // NOWY KOD
+            let s_track = car.sh.get_s_tracks().1;
+
+            // KROK 2: Mapujemy metry na indeks tablicy multipliers
+            // Dzielimy pozycję przez długość toru (ułamek 0.0-1.0) i mnożymy przez liczbę punktów pomiarowych
+            let mult_count = self.track.multipliers.len();
+            let mut idx_m = ((s_track / self.track.length) * mult_count as f64) as usize;
+
+            // Zabezpieczenie: jeśli idx_m wyjdzie poza zakres (np. na samej mecie), bierzemy ostatni element
+            if idx_m >= mult_count { 
+                idx_m = mult_count.saturating_sub(1); 
+            }
+
+            // KROK 3: Pobieramy wartość mnożnika dla tego fragmentu toru
+            // Jeśli wektor jest pusty (błąd pliku), ustawiamy bezpieczne 1.0
+            let multiplier = if mult_count > 0 { 
+                self.track.multipliers[idx_m] 
+            } else { 
+                1.0 
+            };
+
+            // KROK 4: Modyfikujemy czas okrążenia (odwrotność prędkości)
+            // Dzielimy, ponieważ:
+            // - Jeśli multiplier > 1 (prosta) -> mianownik duży -> czas mały -> AUTO PRZYSPIESZA
+            // - Jeśli multiplier < 1 (zakręt) -> mianownik mały -> czas duży -> AUTO ZWALNIA
+            self.cur_laptimes[i] = self.cur_th_laptimes[i] / multiplier;
+            
+            // NOWY KOD
+
 
             // Obsługa Flag (jeśli nie SC)
             if !sc_active && !car.sh.pit_act {
