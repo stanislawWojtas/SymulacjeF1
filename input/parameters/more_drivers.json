@@ -4,7 +4,7 @@
     "tot_no_laps": 53,
     "track_name": "Monza",
     "initial_weather": "Dry",
-    "rain_probability": 0.03,
+    "rain_probability": 0.00,
     "drs_allowed_lap": 2,
     "use_drs": true,
     "participants": [33, 11, 44, 63, 16, 55, 4, 81, 14, 18, 10, 31, 23, 2, 22, 3, 77, 24, 27, 20]

@@ -1,7 +1,42 @@
 {
-  "soft": { "k1_scale": 1.8, "default_cliff_age": 15.0, "default_k2": 0.050, "base_offset": -1.0 },
-  "medium": { "k1_scale": 1.0, "default_cliff_age": 28.0, "default_k2": 0.020, "base_offset": -0.5 },
-  "hard": { "k1_scale": 0.5, "default_cliff_age": 45.0, "default_k2": 0.010, "base_offset": 0.0 },
-  "intermediate": { "k1_scale": 1.2, "default_cliff_age": 25.0, "default_k2": 0.030, "base_offset": 0.2 },
-  "wet": { "k1_scale": 1.5, "default_cliff_age": 20.0, "default_k2": 0.040, "base_offset": 0.8 }
+  "soft": {
+    "k0": 0.0,
+    "k1_lin": 0.1,
+    "k1_scale": 2.5,
+    "default_cliff_age": 16.0,
+    "default_k2": 0.5,
+    "base_offset": -1.2
+  },
+  "medium": {
+    "k0": 0.2,
+    "k1_lin": 0.06,
+    "k1_scale": 1.5,
+    "default_cliff_age": 28.0,
+    "default_k2": 0.3,
+    "base_offset": -0.6
+  },
+  "hard": {
+    "k0": 0.4,
+    "k1_lin": 0.03,
+    "k1_scale": 1.0,
+    "default_cliff_age": 45.0,
+    "default_k2": 0.1,
+    "base_offset": 0.0
+  },
+  "intermediate": {
+    "k0": 0.2,
+    "k1_lin": 0.05,
+    "k1_scale": 1.2,
+    "default_cliff_age": 25.0,
+    "default_k2": 0.030,
+    "base_offset": 0.2
+  },
+  "wet": {
+    "k0": 0.3,
+    "k1_lin": 0.04,
+    "k1_scale": 1.5,
+    "default_cliff_age": 20.0,
+    "default_k2": 0.040,
+    "base_offset": 0.8
+  }
 }
