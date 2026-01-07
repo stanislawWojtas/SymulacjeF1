@@ -407,8 +407,8 @@ impl Race {
         let active_sc = matches!(self.flag_state, FlagState::Sc);
         if !active_sc {
             for (i, car) in self.cars_list.iter().enumerate() {
-                // Sprawdzamy czy auto ma DNF i czy nie skończyło wyścigu (zabezpieczenie przed ciągłym wywoływaniem SC)
-                if car.status == CarStatus::DNF && !self.race_finished[i] && !self.sc_triggers[i] {
+                // SC ma reagować na świeże DNF (kolizja/awaria) – filtrujemy po sc_triggers, bez patrzenia na race_finished
+                if car.status == CarStatus::DNF && !self.sc_triggers[i] {
                      // Tutaj prosta logika: jak ktoś ma DNF i nie dojechał do mety (czyli rozbił się), wywołaj SC.
                      // W pełnej wersji trzeba by sprawdzać czy ten DNF nastąpił *teraz*.
                     if self.print_events { println!("SAFETY CAR DEPLOYED (Caused by car #{})", car.car_no); }
@@ -509,37 +509,19 @@ impl Race {
                 continue;
             }
 
-            // // Startujemy od teoretycznego czasu (fizyka)
-            // self.cur_laptimes[i] = self.cur_th_laptimes[i];
+            self.cur_laptimes[i] = self.cur_th_laptimes[i];
 
-            // NOWY KOD
-            let s_track = car.sh.get_s_tracks().1;
-
-            // KROK 2: Mapujemy metry na indeks tablicy multipliers
-            // Dzielimy pozycję przez długość toru (ułamek 0.0-1.0) i mnożymy przez liczbę punktów pomiarowych
+            // Lokalna krzywizna toru wpływa na średni czas okrążenia w tym kroku (szybciej na prostych, wolniej w zakrętach)
             let mult_count = self.track.multipliers.len();
-            let mut idx_m = ((s_track / self.track.length) * mult_count as f64) as usize;
-
-            // Zabezpieczenie: jeśli idx_m wyjdzie poza zakres (np. na samej mecie), bierzemy ostatni element
-            if idx_m >= mult_count { 
-                idx_m = mult_count.saturating_sub(1); 
+            if mult_count > 0 {
+                let s_track = car.sh.get_s_tracks().1;
+                let mut idx_m = ((s_track / self.track.length) * mult_count as f64) as usize;
+                if idx_m >= mult_count {
+                    idx_m = mult_count - 1;
+                }
+                let multiplier = self.track.multipliers[idx_m].max(0.1);
+                self.cur_laptimes[i] /= multiplier;
             }
-
-            // KROK 3: Pobieramy wartość mnożnika dla tego fragmentu toru
-            // Jeśli wektor jest pusty (błąd pliku), ustawiamy bezpieczne 1.0
-            let multiplier = if mult_count > 0 { 
-                self.track.multipliers[idx_m] 
-            } else { 
-                1.0 
-            };
-
-            // KROK 4: Modyfikujemy czas okrążenia (odwrotność prędkości)
-            // Dzielimy, ponieważ:
-            // - Jeśli multiplier > 1 (prosta) -> mianownik duży -> czas mały -> AUTO PRZYSPIESZA
-            // - Jeśli multiplier < 1 (zakręt) -> mianownik mały -> czas duży -> AUTO ZWALNIA
-            self.cur_laptimes[i] = self.cur_th_laptimes[i] / multiplier;
-            
-            // NOWY KOD
 
 
             // Obsługa Flag (jeśli nie SC)
@@ -701,8 +683,8 @@ impl Race {
                 }
 
                 // 2. Nie możemy jechać do tyłu ani stać w miejscu (chyba że korek totalny)
-                if target_speed < 10.0 {
-                    target_speed = 10.0; 
+                if target_speed < 35.0 {
+                    target_speed = 35.0; 
                 }
 
                 // Aplikujemy prędkość (zamiana na czas okrążenia)
@@ -800,11 +782,6 @@ impl Race {
                         let contact_prob = 0.005 * agg_factor; // niewielka szansa
 
                         if rng.gen::<f64>() < contact_prob {
-                            if self.print_events { println!(
-                                "CONTACT: Minor contact between #{} and #{}",
-                                self.cars_list[idx_front].car_no,
-                                self.cars_list[idx_rear].car_no
-                            ); }
                             // Częściej obrywa atakujący (z tyłu)
                             let victim_idx = if rng.gen::<f64>() > 0.3 { idx_rear } else { idx_front };
                             self.cars_list[victim_idx].accumulated_damage_penalty += 0.3;
@@ -844,6 +821,8 @@ impl Race {
                             // Reflect immediate removal from pace this step
                             self.cur_laptimes[idx_front] = f64::INFINITY;
                             self.cur_laptimes[idx_rear] = f64::INFINITY;
+                            self.race_finished[idx_front] = true;
+                            self.race_finished[idx_rear] = true;
                             if self.print_events { println!(
                                 "CRASH: Car {} and Car {} collided in Turn!",
                                 self.cars_list[idx_front].car_no,
@@ -1021,6 +1000,7 @@ impl Race {
                         time_s: self.cur_racetime,
                         cars: vec![car.car_no],
                     });
+                    self.race_finished[i] = true;
                 }
 
                 // update theoretical lap time
@@ -1112,13 +1092,16 @@ impl Race {
     }
 
     fn get_car_order_on_track(&self) -> Vec<usize> {
-        let s_tracks_cur: Vec<f64> = self
+        let mut s_tracks_cur: Vec<(usize, f64)> = self
             .cars_list
             .iter()
-            .map(|car| car.sh.get_s_tracks().1)
+            .enumerate()
+            .filter(|(_, car)| matches!(car.status, CarStatus::Running))
+            .map(|(idx, car)| (idx, car.sh.get_s_tracks().1))
             .collect();
 
-        argsort(&s_tracks_cur, SortOrder::Descending)
+        s_tracks_cur.sort_unstable_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
+        s_tracks_cur.into_iter().map(|(idx, _)| idx).collect()
     }
 
     pub fn calc_projected_delta_t(

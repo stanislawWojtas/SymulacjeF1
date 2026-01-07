@@ -177,8 +177,6 @@ pub fn calc_track_multipliers(track_name: &str) -> Result<Vec<f64>> {
         };
     }
 
-    println!("Track Multipliers for {}: {:?}", track_name, multi);
-
     Ok(multi) // Return the vector
 }
 
