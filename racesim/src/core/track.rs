@@ -245,13 +245,15 @@ impl Track {
 
     pub fn is_in_overtaking_zone(&self, s_track: f64) -> bool {
         for zone in &self.overtaking_zones {
-            if zone[0] < zone[1]{
-                if s_track >= zone[0] && s_track <= zone[1]{
+            if zone[0] < zone[1] {
+                // Normal case: overtaking zone does not wrap around the finish line
+                if s_track >= zone[0] && s_track <= zone[1] {
                     return true;
-                }else{
-                    if s_track >= zone[0] || s_track <= zone[1] {
-                        return true;
-                    }
+                }
+            } else {
+                // Wrap-around case: zone crosses the finish line
+                if s_track >= zone[0] || s_track <= zone[1] {
+                    return true;
                 }
             }
         }
