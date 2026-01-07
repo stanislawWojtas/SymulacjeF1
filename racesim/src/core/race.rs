@@ -414,7 +414,7 @@ impl Race {
                     if self.print_events { println!("SAFETY CAR DEPLOYED (Caused by car #{})", car.car_no); }
                     self.flag_state = FlagState::Sc;
                     // Tryb dynamiczny: odjazd po ustawieniu kolejki kierowców
-                    self.sc_timer = f64::INFINITY; // włącz licznik dopiero po lineup
+                    self.sc_timer = 300.0; // maksymalnie 300 sekund na sf
                     // Oznacz wszystkie aktualne DNFs jako już obsłużone (unikamy podwójnego SC)
                     for (j, c) in self.cars_list.iter().enumerate() {
                         if c.status == CarStatus::DNF { self.sc_triggers[j] = true; }
@@ -713,15 +713,11 @@ impl Race {
 
             // Jeśli mamy lineup i nie odliczamy jeszcze, uruchom krótki licznik do zjazdu SC
             if lineup_ok {
-                if !self.sc_timer.is_finite() {
-                    self.sc_timer = self.sc_release_delay_s;
+                if self.sc_timer > 10.0 {
+                    self.sc_timer = 10.0;
+                    if self.print_events { println!("Pack formad - safety car coming in shortly")}
                 }
-            } else {
-                // Brak lineup → zatrzymaj odliczanie do odjazdu
-                if self.sc_timer.is_finite() {
-                    self.sc_timer = f64::INFINITY;
-                }
-            }
+            } 
         } 
         // --- CZĘŚĆ 3: INTERAKCJE (TYLKO BEZ SC) ---
         else {

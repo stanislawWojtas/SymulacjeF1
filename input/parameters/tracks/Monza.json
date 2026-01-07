@@ -5,7 +5,7 @@
   "t_loss_firstlap": 4.0,
   "pit_speedlimit": 22.2,
   "t_gap_racepace": 3.0,
-  "s_mass": 0.08,
+  "s_mass": 0.035,
   "t_drseffect": -0.6,
   "turn_1": 300.0,
   "d_first_gridpos": 100.0,

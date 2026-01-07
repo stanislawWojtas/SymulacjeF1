@@ -5,6 +5,7 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::rc::Rc;
 use rand::Rng;
+use rand_distr::{Distribution, Normal};
 
 /// Uproszczona strategia: dodano z powrotem `driver_initials` tylko dla startu.
 /// * `inlap` - Okrążenie zjazdowe pit stopu (0 dla info o oponach na starcie)
@@ -99,7 +100,7 @@ impl Car {
 
 
     pub fn calc_basic_timeloss(&self, s_mass: f64, is_wet: bool, tire_cfg: &TireConfig) -> f64 {
-        let degr_pars = self.driver.get_degr_pars(&self.tireset.compound);
+        let degr_pars = tire_cfg.degr_pars_for_compound(&self.tireset.compound);
         let tire_loss = self.tireset.t_add_tireset(&degr_pars, tire_cfg);
 
         let mut weather_penalty = 0.0;
@@ -219,11 +220,15 @@ impl Car {
     /// Tylko czas zmiany opon.
     pub fn t_add_pit_standstill(&self, inlap: u32) -> f64 {
         let strategy_entry_opt = self.get_strategy_entry(inlap);
+        let mut rng = rand::thread_rng();
+        let pit_time_dist = Normal::new(2.4, 0.4)
+            .expect("Pit stop distribution parameters are valid");
 
         // Czas zmiany opon (tylko jeśli strategia przewiduje zmianę)
         let t_standstill = if let Some(strategy_entry) = strategy_entry_opt {
             if !strategy_entry.compound.is_empty() {
-                self.t_pit_tirechange
+                let sampled_pit_time: f64 = pit_time_dist.sample(&mut rng);
+                sampled_pit_time.max(0.0)
             } else {
                 0.0
             }

@@ -30,6 +30,8 @@ pub struct Tireset {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct TireCompoundConfig {
+    pub k0: f64,
+    pub k1_lin: f64,
     pub k1_scale: f64,
     pub default_cliff_age: f64,
     pub default_k2: f64,
@@ -54,6 +56,18 @@ impl TireConfig {
             "INTERMEDIATE" => &self.intermediate,
             "WET" => &self.wet,
             _ => &self.medium, // neutral fallback
+        }
+    }
+
+    /// Returns base degradation parameters for a compound shared by all drivers/teams.
+    pub fn degr_pars_for_compound(&self, comp: &str) -> DegrPars {
+        let cfg = self.for_compound(comp);
+        DegrPars {
+            degr_model: DegrModel::Lin,
+            k_0: cfg.k0,
+            k_1_lin: cfg.k1_lin,
+            cliff_age: Some(cfg.default_cliff_age),
+            k_2_cliff: Some(cfg.default_k2),
         }
     }
 }

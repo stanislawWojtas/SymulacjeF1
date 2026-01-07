@@ -1,12 +1,11 @@
-use crate::core::tireset::DegrPars;
 use serde::Deserialize;
+use serde_json::Value;
 use std::collections::HashMap;
 
 /// * `initials` - Driver initials, e.g. BOT
 /// * `name` - Driver name, e.g. Valtteri Bottas
 /// * `t_driver` - (s) Time loss per lap due to driver abilities
 /// * `vel_max` - (km/h) Maximum velocity during qualifying
-/// * `degr_pars_all` - Map containing the degradation parameters for all relevant tire compounds
 #[derive(Debug, Deserialize, Clone)]
 pub struct DriverPars {
     pub initials: String,
@@ -18,7 +17,8 @@ pub struct DriverPars {
     pub aggression: f64,
     // Usunięto t_teamorder
     pub vel_max: f64,
-    pub degr_pars_all: HashMap<String, DegrPars>,
+    #[serde(flatten)]
+    pub extra: HashMap<String, Value>, // allows legacy tire/degradation fields without using them
 }
 
 fn default_consistency() -> f64 {
@@ -38,7 +38,6 @@ pub struct Driver {
     pub aggression: f64,
     // Usunięto t_teamorder
     vel_max: f64,
-    degr_pars_all: HashMap<String, DegrPars>,
 }
 
 impl Driver {
@@ -51,15 +50,6 @@ impl Driver {
             aggression: driver_pars.aggression,
             // Usunięto t_teamorder
             vel_max: driver_pars.vel_max,
-            degr_pars_all: driver_pars.degr_pars_all.to_owned(),
         }
-    }
-
-    /// The method returns the degradation parameters of the current driver for the given compound.
-    pub fn get_degr_pars(&self, compound: &str) -> DegrPars {
-        self.degr_pars_all
-            .get(compound)
-            .expect("Degradation parameters are not available for the given compound!")
-            .to_owned()
     }
 }
