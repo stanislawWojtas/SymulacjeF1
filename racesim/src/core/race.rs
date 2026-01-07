@@ -967,6 +967,21 @@ impl Race {
             }
         }
 
+        // Zbierz indeksy aut które ukończyły okrążenie
+        let mut cars_completing_lap = Vec::new();
+        for i in 0..self.cars_list.len() {
+            if self.cars_list[i].sh.get_new_lap() {
+                cars_completing_lap.push(i);
+            }
+        }
+
+        // Najpierw oblicz nowe teoretyczne czasy dla następnego okrążenia
+        // (PRZED zwiększeniem wieku opon)
+        for &i in &cars_completing_lap {
+            self.calc_th_laptime(i);
+        }
+
+        // Teraz obsłuż ukończenia okrążeń
         for i in 0..self.cars_list.len() {
             let car = &mut self.cars_list[i];
 
@@ -1002,9 +1017,6 @@ impl Race {
                     });
                     self.race_finished[i] = true;
                 }
-
-                // update theoretical lap time
-                self.calc_th_laptime(i);
             }
         }
     }

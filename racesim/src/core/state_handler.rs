@@ -72,15 +72,29 @@ impl StateHandler {
     }
 
     pub fn get_s_track_passed_this_step(&self, s_track: f64) -> bool {
-        // Sprawdza, czy bolid przekroczył linię mety w tym kroku czasowym
+        // Sprawdza, czy bolid minął dany koordynat s w tym kroku czasowym
         let new_lap = self.get_new_lap();
 
-        // Sprawdza, czy bolid minął dany koordynat s w tym kroku
-        if (self.s_track_prev < s_track || new_lap) && s_track <= self.s_track_cur
-            || self.s_track_prev < s_track && (s_track <= self.s_track_cur || new_lap)
-        {
+        // Przypadek 1: Normalne przejście bez przekroczenia mety
+        // s_prev < s_track <= s_cur (np. 100 < 150 <= 200)
+        if !new_lap && self.s_track_prev < s_track && s_track <= self.s_track_cur {
             return true;
         }
+
+        // Przypadek 2: Przejechaliśmy przez metę w tym kroku
+        if new_lap {
+            // Sprawdź czy punkt był przed metą i minęliśmy go przed metą
+            // s_prev < s_track <= track_length (np. 5700 < 5800 <= 5793)
+            if self.s_track_prev < s_track {
+                return true;
+            }
+            // Lub punkt jest po mecie i minęliśmy go po mecie
+            // 0 <= s_track <= s_cur (np. 0 <= 50 <= 100)
+            if s_track <= self.s_track_cur {
+                return true;
+            }
+        }
+
         false
     }
 

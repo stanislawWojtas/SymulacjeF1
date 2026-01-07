@@ -120,8 +120,9 @@ impl Tireset {
         match degr_pars.degr_model {
             DegrModel::Lin => {
                 // Wersja liniowa z dodatkowym domyślnym cliffem po długim stincie
-                // Wynik: bazowy offset mieszanki + (k_0 + k_1 * age) + ewentualny cliff
-                let linear_degr = degr_pars.k_0 + (degr_pars.k_1_lin * k1_scale) * age;
+                // Wynik: bazowy offset mieszanki + (k_1 * age) + ewentualny cliff
+                // k_0 zostało usunięte, aby świeże opony miały tylko base_offset
+                let linear_degr = (degr_pars.k_1_lin * k1_scale) * age;
                 let cliff_penalty = if age > default_cliff_age {
                     let over = age - default_cliff_age;
                     (default_k2 * over.powf(2.0)).min(MAX_TIRE_PENALTY)
@@ -132,7 +133,8 @@ impl Tireset {
             },
 
             DegrModel::NonlinWithCliff => {
-                let mut degradation = degr_pars.k_0 + degr_pars.k_1_lin * age;
+                // k_0 usunięte również dla modelu nieliniowego
+                let mut degradation = degr_pars.k_1_lin * age;
 
                 let cliff_age = degr_pars.cliff_age.unwrap_or(default_cliff_age);
                 let k_2 = degr_pars.k_2_cliff.unwrap_or(default_k2);
