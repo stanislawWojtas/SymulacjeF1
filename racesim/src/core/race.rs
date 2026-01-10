@@ -388,11 +388,17 @@ impl Race {
                     idx_m = mult_count - 1;
                 }
                 let multiplier = self.track.multipliers[idx_m].max(0.1);
-                // Slow down in corners (multiplier < 1.0) for visual realism
-                let adjusted_multiplier = 1.0 - ((1.0 - multiplier) * 1.5).min(0.9);
-                self.cur_laptimes[i] / adjusted_multiplier
+                
+                let cur_laptime = self.cur_laptimes[i];
+                if cur_laptime > 0.0 && cur_laptime.is_finite() {
+                    let v_avg = self.track.length / cur_laptime;
+                    let visual_speed_factor = 0.3 + 0.9 * multiplier.powf(2.5);
+                    let visual_speed = v_avg * visual_speed_factor;
+                    self.track.length / visual_speed
+                } else {
+                    self.cur_laptimes[i]
+                }
             } else {
-                // No multipliers defined, use average pace
                 self.cur_laptimes[i]
             };
 
