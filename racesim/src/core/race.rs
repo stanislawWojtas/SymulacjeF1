@@ -1,4 +1,4 @@
-use crate::core::car::{Car, CarPars, CarStatus, StrategyEntry};
+use crate::core::car::{Car, CarPars, CarStatus};
 use crate::core::driver::{Driver, DriverPars};
 use crate::core::track::{Track, TrackPars};
 use crate::core::tireset::TireConfig;
@@ -6,21 +6,11 @@ use crate::post::race_result::{CarDriverPair, RaceEvent, RaceResult};
 use serde::Deserialize;
 use core::f64;
 use std::collections::HashMap;
-// use std::f32::INFINITY; // unused
 use std::rc::Rc;
-use helpers::general::{argmax, argsort, SortOrder};
-use rand_distr::{Normal, Distribution}; 
-use rand::Rng; // bring Rng trait into scope for thread_rng().gen::<T>()
+use helpers::general::argmax;
+use rand_distr::{Normal, Distribution};
+use rand::Rng;
 
-/// * `season` - Sezon
-/// * `tot_no_laps` - Całkowita liczba okrążeń
-/// * `drs_allowed_lap` - (Nieużywane po uproszczeniu)
-/// * `min_t_dist` - (Nieużywane po uproszczeniu)
-/// * `t_duel` - (Nieużywane po uproszczeniu)
-/// * `t_overtake_loser` - (Nieużywane po uproszczeniu)
-/// * `drs_window` - (Nieużywane po uproszczeniu)
-/// * `use_drs` - (Nieużywane po uproszczeniu)
-/// * `participants` - Lista uczestników
 fn default_initial_weather() -> String { "Dry".to_string() }
 fn default_rain_probability() -> f64 { 0.0 }
 fn default_min_weather_duration_s() -> f64 { 200.0 }
@@ -70,11 +60,11 @@ pub struct SafetyCar{
 
 #[derive(Debug, Clone)]
 pub enum FlagState {
-    G,   // green
-    Y,   // yellow
-    Vsc, // virtual safety car
-    Sc,  // safety car
-    C,   // chequered
+    G,
+    Y,
+    Vsc,
+    Sc,
+    C,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -109,12 +99,11 @@ pub struct Race {
     events: Vec<RaceEvent>,
     pub cur_racetime: f64,
     pub safety_car: SafetyCar,
-    sc_triggers: Vec<bool>, // auta które triggerowały safety car żeby w pętli tego nie robiły
-    // Safety Car control
+    sc_triggers: Vec<bool>,
     sc_target_gap_m: f64,
     sc_lineup_tolerance_m: f64,
-    sc_release_delay_s: f64,
-    season: u32,
+    _sc_release_delay_s: f64,
+    _season: u32,
     pub tot_no_laps: u32,
     pub drs_allowed_lap: u32, 
     pub cur_lap_leader: u32,
@@ -145,23 +134,16 @@ impl Race {
         car_pars_all: &HashMap<u32, CarPars>,
         timestep_size: f64,
     ) -> Race {
-        // create drivers
         let mut drivers_list = HashMap::with_capacity(driver_pars_all.len());
 
         for (initials, driver_pars) in driver_pars_all.iter() {
             drivers_list.insert(initials.to_owned(), Rc::new(Driver::new(driver_pars)));
         }
-
-        // Build a robust lookup by actual driver initials (value), not only map key
         let mut drivers_by_initials: HashMap<String, Rc<Driver>> = HashMap::with_capacity(drivers_list.len());
         for driver in drivers_list.values() {
             drivers_by_initials.insert(driver.initials.clone(), Rc::clone(driver));
         }
 
-        // Debug: list available driver initials
-        // debug listing removed to avoid noisy output in multi-run scenarios
-
-        // create cars
         let no_cars = race_pars.participants.len();
         let mut cars_list: Vec<Car> = Vec::with_capacity(no_cars);
 
@@ -182,10 +164,8 @@ impl Race {
             ));
         }
 
-        // sort cars list by car number
         cars_list.sort_unstable_by(|a, b| a.car_no.partial_cmp(&b.car_no).unwrap());
 
-        // Ensure starting fuel is sufficient for the race distance (no refueling era)
         for car in cars_list.iter_mut() {
             let required = car.fuel_needed_for_laps(race_pars.tot_no_laps);
             let target = required * (1.0 + sim_consts.fuel_margin);
@@ -194,13 +174,11 @@ impl Race {
             }
         }
 
-        //set the weather
         let start_weather = match race_pars.initial_weather.as_str() {
             "Rain" => WeatherState::Rain,
-            _ => WeatherState::Dry // domyślnie jest sucho            
+            _ => WeatherState::Dry
         };
 
-        // create race
         let mut race = Race {
             timestep_size,
             cur_racetime: 0.0,
@@ -215,11 +193,11 @@ impl Race {
             events: Vec::new(),
             safety_car: SafetyCar::new(),
             sc_timer: 0.0,
-            sc_triggers: vec![false; no_cars], //na start wszystkie false
+            sc_triggers: vec![false; no_cars],
             sc_target_gap_m: 15.0,
             sc_lineup_tolerance_m: 5.0,
-            sc_release_delay_s: 5.0,
-            season: race_pars.season,
+            _sc_release_delay_s: 5.0,
+            _season: race_pars.season,
             tot_no_laps: race_pars.tot_no_laps,
             drs_allowed_lap: race_pars.drs_allowed_lap,
             cur_lap_leader: 1,
@@ -240,42 +218,33 @@ impl Race {
             tire_config: tire_config.clone(),
         };
 
-        // initialize race for each car
         for idx in 0..race.cars_list.len() {
-            // calculate theoretical lap time for first lap
             race.calc_th_laptime(idx);
 
-            // initialize state handler of the car
             let car = &mut race.cars_list[idx];
 
             let s_track_start =
                 race.track.d_first_gridpos + (car.p_grid - 1) as f64 * race.track.d_per_gridpos;
 
             car.sh.initialize_state_handler(
-                race.use_drs,                                   // 1. Czy DRS włączony
-                race.track.turn_1,                              // 2. Blokada DRS na starcie
-                race.drs_window,                                // 3. Okno czasowe (1s)
-                s_track_start,                                  // 4. Pozycja startowa
-                race.track.length,                              // 5. Długość toru
-                race.track.drs_measurement_points.to_owned(),   // 6. Punkty detekcji
-                race.track.pit_zone,                            // 7. Aleja serwisowa
-                race.track.overtaking_zones.to_owned(),         // 8. Strefy wyprzedzania
-                race.track.corners.to_owned(),                  // 9. Zakręty
+                race.use_drs,
+                race.track.turn_1,
+                race.drs_window,
+                s_track_start,
+                race.track.length,
+                race.track.drs_measurement_points.to_owned(),
+                race.track.pit_zone,
+                race.track.overtaking_zones.to_owned(),
+                race.track.corners.to_owned(),
             );
         }
 
         race
     }
-
-    // ---------------------------------------------------------------------------------------------
     // MAIN METHOD ---------------------------------------------------------------------------------
-    // ---------------------------------------------------------------------------------------------
 
     /// Metoda symuluje jeden krok czasowy.
     pub fn simulate_timestep(&mut self) {
-
-        // Pogoda: skaluj prawdopodobieństwo zmian do kroku czasu i wymuś minimalny czas trwania
-        // Interpretacja: `rain_probability` to prawdopodobieństwo zmiany na minutę (nie na krok).
         let mut rng = rand::thread_rng();
         let eligible_for_change = (self.cur_racetime - self.last_weather_change) >= self.min_weather_duration_s;
         if eligible_for_change {
@@ -285,15 +254,13 @@ impl Race {
                     WeatherState::Dry => {
                         if self.print_events { println!("WEATHER CHANGE: Rain started at {:.2}s!", self.cur_racetime); }
                         self.last_weather_change = self.cur_racetime;
-                        // event: rain start
                         self.events.push(RaceEvent {
                             kind: "WeatherRainStart".to_string(),
                             lap: self.cur_lap_leader,
                             time_s: self.cur_racetime,
                             cars: vec![],
                         });
-                        // Zaplanuj pit na najbliższe okrążenie dla slicków → Intermediate
-                        for (i, car) in self.cars_list.iter_mut().enumerate() {
+                        for car in self.cars_list.iter_mut() {
                             if car.status == CarStatus::DNF { continue; }
                             let comp = car.get_current_compound();
                             match comp {
@@ -310,15 +277,13 @@ impl Race {
                     WeatherState::Rain => {
                         if self.print_events { println!("WEATHER CHANGE: Rain stopped at {:.2}s!", self.cur_racetime); }
                         self.last_weather_change = self.cur_racetime;
-                        // event: dry start
                         self.events.push(RaceEvent {
                             kind: "WeatherDryStart".to_string(),
                             lap: self.cur_lap_leader,
                             time_s: self.cur_racetime,
                             cars: vec![],
                         });
-                        // Zaplanuj pit na najbliższe okrążenia dla Inter/Wet → powrót do slicków
-                        for (i, car) in self.cars_list.iter_mut().enumerate() {
+                        for car in self.cars_list.iter_mut() {
                             if car.status == CarStatus::DNF { continue; }
                             let comp = car.get_current_compound();
                             let target_slick = car.last_slick_compound.clone().unwrap_or_else(|| "MEDIUM".to_string());
@@ -339,8 +304,6 @@ impl Race {
                 };
             }
         }
-
-        // increment discretization variable
         self.cur_racetime += self.timestep_size;
 
         if matches!(self.flag_state, FlagState::Sc){
@@ -350,11 +313,8 @@ impl Race {
 
             if !self.safety_car.active{
                 self.safety_car.active = true;
-                // safety car startuje z poziomu lidera
                 let mut leader_idx = 0;
                 let mut max_prog = -1.0;
-                
-                // szukamy lidera wyścigu i to przed nim będzie safety car
                 for(i, car) in self.cars_list.iter().enumerate(){
                     let prog = car.sh.get_race_prog();
                     if prog > max_prog && car.status != CarStatus::DNF{
@@ -371,7 +331,6 @@ impl Race {
                 } else {
                     self.safety_car.lap = self.cur_lap_leader;
                 }
-                // event: SC deployed
                 self.events.push(RaceEvent {
                     kind: "SC_DEPLOYED".to_string(),
                     lap: self.cur_lap_leader,
@@ -392,7 +351,6 @@ impl Race {
                 if self.print_events { println!("SAFETY CAR IN THIS LAP - RACE RESUMING"); }
                 self.flag_state = FlagState::G;
                 self.safety_car.active = false;
-                // event: SC in
                 self.events.push(RaceEvent {
                     kind: "SC_IN".to_string(),
                     lap: self.cur_lap_leader,
@@ -407,15 +365,11 @@ impl Race {
         let active_sc = matches!(self.flag_state, FlagState::Sc);
         if !active_sc {
             for (i, car) in self.cars_list.iter().enumerate() {
-                // SC ma reagować na świeże DNF (kolizja/awaria) – filtrujemy po sc_triggers, bez patrzenia na race_finished
                 if car.status == CarStatus::DNF && !self.sc_triggers[i] {
-                     // Tutaj prosta logika: jak ktoś ma DNF i nie dojechał do mety (czyli rozbił się), wywołaj SC.
                      // W pełnej wersji trzeba by sprawdzać czy ten DNF nastąpił *teraz*.
                     if self.print_events { println!("SAFETY CAR DEPLOYED (Caused by car #{})", car.car_no); }
                     self.flag_state = FlagState::Sc;
-                    // Tryb dynamiczny: odjazd po ustawieniu kolejki kierowców
                     self.sc_timer = 300.0; // maksymalnie 300 sekund na sf
-                    // Oznacz wszystkie aktualne DNFs jako już obsłużone (unikamy podwójnego SC)
                     for (j, c) in self.cars_list.iter().enumerate() {
                         if c.status == CarStatus::DNF { self.sc_triggers[j] = true; }
                     }
@@ -423,16 +377,9 @@ impl Race {
                 }
             }
         }
-
-        // adjust current lap times
         self.calc_cur_laptimes();
-
-        // handle state transitions
         self.handle_state_transitions();
-
-        // update race progress
         for (i, car) in self.cars_list.iter_mut().enumerate() {
-            // Calculate local multiplier for physical slowing in corners (visual only)
             let effective_movement_pace = if self.track.multipliers.len() > 0 {
                 let s_track = car.sh.get_s_tracks().1;
                 let mult_count = self.track.multipliers.len();
@@ -452,24 +399,15 @@ impl Race {
             car.sh
                 .update_race_prog(effective_movement_pace, self.timestep_size)
         }
-
-        // handle pit stop standstill part (uncommon case)
         if !self.track.pits_aft_finishline {
             self.handle_pit_standstill()
         }
-
-        // handle lap transitions
         self.handle_lap_transitions();
-
-        // handle pit stop standstill part (common case)
         if self.track.pits_aft_finishline {
             self.handle_pit_standstill()
         }
     }
-
-    // ---------------------------------------------------------------------------------------------
     // RACE SIMULATOR PARTS ------------------------------------------------------------------------
-    // ---------------------------------------------------------------------------------------------
 
     /// Oblicza teoretyczny czas okrążenia
     fn calc_th_laptime(&mut self, idx: usize) {
@@ -488,11 +426,7 @@ impl Race {
             0.0
         };
 
-        //Pogoda
         let is_wet = self.weather_state == WeatherState::Rain;
-
-        
-        // Bazowy czas
         let lap_time_base = self.track.t_q
         + self.track.t_gap_racepace
         + self.cars_list[idx].calc_basic_timeloss(self.track.s_mass, is_wet, &self.tire_config);
@@ -500,8 +434,7 @@ impl Race {
         self.cur_th_laptimes[idx] = lap_time_base + random_factor;
     }
 
-    /// Dostosowuje teoretyczne czasy okrążeń (uproszczone).
-/// Dostosowuje teoretyczne czasy okrążeń (uproszczone + SC logic).
+    /// Dostosowuje teoretyczne czasy okrążeń (uproszczone + SC logic).
     fn calc_cur_laptimes(&mut self) {
         // Sprawdź czy Safety Car jest fizycznie na torze i aktywny
         let sc_active = matches!(self.flag_state, FlagState::Sc) && self.safety_car.active;
@@ -509,7 +442,6 @@ impl Race {
         let sc_speed = if sc_active { self.safety_car.speed } else { 0.0 };
 
         // Oblicz całkowity dystans Safety Cara od startu wyścigu.
-        // Safety Car `lap` to numer aktualnego okrążenia (od 1).
         // Dla dystansu potrzebujemy liczby UKOŃCZONYCH okrążeń, więc (lap - 1).
         let sc_completed_laps = if self.safety_car.lap > 0 { self.safety_car.lap - 1 } else { 0 };
         let sc_total_dist = if sc_active {
@@ -528,20 +460,6 @@ impl Race {
 
             self.cur_laptimes[i] = self.cur_th_laptimes[i];
 
-            // Multiplier logic removed to fix jagged graphs
-            // let mult_count = self.track.multipliers.len();
-            // if mult_count > 0 {
-            //     let s_track = car.sh.get_s_tracks().1;
-            //     let mut idx_m = ((s_track / self.track.length) * mult_count as f64) as usize;
-            //     if idx_m >= mult_count {
-            //         idx_m = mult_count - 1;
-            //     }
-            //     let multiplier = self.track.multipliers[idx_m].max(0.1);
-            //     self.cur_laptimes[i] /= multiplier;
-            // }
-
-
-            // Obsługa Flag (jeśli nie SC)
             if !sc_active && !car.sh.pit_act {
                 if self.cur_laptimes[i] < self.get_min_laptime_flag_state() {
                     self.cur_laptimes[i] = self.get_min_laptime_flag_state();
@@ -660,7 +578,6 @@ impl Race {
             // 1. Sortujemy auta według pozycji na torze (kto jest pierwszy)
             let mut car_indices: Vec<usize> = (0..self.cars_list.len()).collect();
             car_indices.sort_by(|&a, &b| {
-                // Sortowanie malejące po postępie wyścigu
                 self.cars_list[b].sh.get_race_prog().partial_cmp(&self.cars_list[a].sh.get_race_prog()).unwrap()
             });
 
@@ -845,7 +762,6 @@ impl Race {
                                 self.cars_list[idx_front].car_no,
                                 self.cars_list[idx_rear].car_no
                             ); }
-                            // event: crash
                             self.events.push(RaceEvent {
                                 kind: "Crash".to_string(),
                                 lap: self.cur_lap_leader,
@@ -978,7 +894,6 @@ impl Race {
 
         if self.cur_lap_leader > self.tot_no_laps && !matches!(self.flag_state, FlagState::C) {
             self.flag_state = FlagState::C;
-            // Oznacz wszystkie auta jako ukończone, aby pętla główna mogła się zakończyć
             for finished in self.race_finished.iter_mut() {
                 *finished = true;
             }
@@ -1071,10 +986,7 @@ impl Race {
             );
         }
     }
-
-    // ---------------------------------------------------------------------------------------------
     // METHODS (HELPERS) ---------------------------------------------------------------------------
-    // ---------------------------------------------------------------------------------------------
 
     pub fn get_all_finished(&self) -> bool {
         // Jeśli jest flaga szachownicy, kończymy natychmiast

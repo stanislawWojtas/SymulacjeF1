@@ -118,8 +118,6 @@ impl Track {
             .collect();
 
         track_cl.push(track_cl[0].clone());
-
-        // calculate curvi-linear distance s up to each element
         for i in 1..track_cl.len() {
             track_cl[i].s = track_cl[i - 1].s
                 + track_cl[i]
@@ -134,8 +132,6 @@ impl Track {
         for track_el in track_cl.iter_mut() {
             track_el.s *= scale_factor
         }
-
-        // determine if track is driven clockwise or counter-clockwise using the sum of cross
         // products
         let mut tmp_area = 0.0;
 
@@ -166,7 +162,6 @@ impl Track {
     }
 
     pub fn get_axes_expansion(&self, border: f64) -> [f64; 4] {
-        // determine min and max x and y values
         let (mut x_min, mut x_max, mut y_min, mut y_max) = self.track_cl.iter().fold(
             (
                 self.track_cl[0].coords.x,
@@ -248,7 +243,6 @@ impl Track {
     }
 
     fn get_zone_centerline(&self, zone: &[f64; 2]) -> Vec<Point2d> {
-        // determine start and end index
         let mut start_idx = self.track_cl.iter().position(|el| zone[0] <= el.s).unwrap();
 
         if start_idx == self.track_cl.len() - 1 {
@@ -280,15 +274,11 @@ impl Track {
     pub fn get_dists_for_race_progs(&self, race_progs: &[f64]) -> Vec<f64> {
         // get lap fractions
         let mut lap_fracs: Vec<f64> = race_progs.iter().map(|prog| prog.fract()).collect();
-
-        // normalize input (required for race start)
         for lap_frac in lap_fracs.iter_mut() {
             if *lap_frac < 0.0 {
                 *lap_frac += 1.0
             }
         }
-
-        // calculate distance for lap fracs
         lap_fracs
             .iter()
             .map(|frac| frac * self.track_cl.last().unwrap().s)
@@ -300,8 +290,6 @@ impl Track {
         let s: Vec<f64> = self.track_cl.iter().map(|el| el.s).collect();
         let x: Vec<f64> = self.track_cl.iter().map(|el| el.coords.x).collect();
         let y: Vec<f64> = self.track_cl.iter().map(|el| el.coords.y).collect();
-
-        // calculate coordinates for given distances
         let mut coords: Vec<Point2d> = Vec::with_capacity(dists.len());
 
         for dist in dists.iter() {
@@ -326,19 +314,14 @@ impl Track {
         if dist > self.track_cl.last().unwrap().s {
             panic!("Inserted distance is greater than the track length!")
         }
-
-        // determine idx of first point with a track distance greater than cur_dist
         let tmp_idx = self.track_cl.iter().position(|track_el| dist < track_el.s);
 
         let idx = match tmp_idx {
-            // normal case
             Some(x) => x,
             // this is only the case if dist is equal to the track length -> set index of last
             // element
             _ => self.track_cl.len() - 1,
         };
-
-        // determine normal vector based on the tangent vector between that point and the previous
         // point
         let tan_vec = self.track_cl[idx]
             .coords

@@ -21,7 +21,6 @@ pub struct SimPars {
 /// read_sim_pars reads the JSON file and decodes the JSON string into the simulation parameters
 /// struct.
 pub fn read_sim_pars(filepath: &Path) -> anyhow::Result<SimPars> {
-    // open file
     let fh = OpenOptions::new()
         .read(true)
         .open(filepath)
@@ -29,8 +28,6 @@ pub fn read_sim_pars(filepath: &Path) -> anyhow::Result<SimPars> {
             "Failed to open parameter file {}!",
             filepath.to_str().unwrap()
         ))?;
-
-    // read and parse parameter file content
     let pars = serde_json::from_reader(&fh).context(format!(
         "Failed to parse parameter file {}!",
         filepath.to_str().unwrap()

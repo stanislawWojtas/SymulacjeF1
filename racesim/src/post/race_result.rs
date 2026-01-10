@@ -31,7 +31,6 @@ impl RaceResult {
         &self,
         path: Option<&std::path::Path>,
     ) -> anyhow::Result<String> {
-        // Prepare content strings identical to console format
         let mut tmp_string_laptime = String::new();
         let mut tmp_string_racetime = String::new();
 
@@ -78,15 +77,9 @@ impl RaceResult {
         writeln!(&mut content, "RESULT: Race times")?;
         writeln!(&mut content, "{}", tmp_string_car_driver_info)?;
         writeln!(&mut content, "{}", tmp_string_racetime)?;
-
-        // Ensure output directory exists
         let out_dir = std::path::Path::new("output");
         std::fs::create_dir_all(out_dir)?;
-
-        // Resolve file path (default to output/last_run.txt)
         let out_path = if let Some(p) = path { p.to_path_buf() } else { out_dir.join("last_run.txt") };
-
-        // Write file
         let mut file = std::fs::OpenOptions::new()
             .create(true)
             .truncate(true)
@@ -100,7 +93,6 @@ impl RaceResult {
 
     /// print_lap_and_race_times prints the resulting lap and race times to the console output.
     pub fn print_lap_and_race_times(&self) {
-        // create string for lap times and race times
         let mut tmp_string_laptime = String::new();
         let mut tmp_string_racetime = String::new();
 
@@ -123,8 +115,6 @@ impl RaceResult {
                 }
             }
         }
-
-        // create string with car and driver info
         let mut tmp_string_car_driver_info = String::from("lap, ");
 
         for (i, car_driver_pair) in self.car_driver_pairs.iter().enumerate() {
@@ -144,8 +134,6 @@ impl RaceResult {
                 .unwrap()
             }
         }
-
-        // print everything to the console
         println!("RESULT: Lap times");
         println!("{}", tmp_string_car_driver_info);
         println!("{}", tmp_string_laptime);

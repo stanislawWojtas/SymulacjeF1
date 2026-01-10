@@ -45,7 +45,6 @@ impl RacePlot {
         track_pars: &TrackPars,
         trackfile_path: &Path,
     ) -> anyhow::Result<RacePlot> {
-        // set up interface
         let racesim_interface = RacesimInterface {
             rx,
             race_state: Default::default(),
@@ -163,8 +162,6 @@ impl RacePlot {
 
         // Color palette
         let palette = Palette99::pick;
-
-        // Draw series
         for (i, pair) in result.car_driver_pairs.iter().enumerate() {
             let mut series: Vec<(u32, f64)> = Vec::new();
             for lap in 1..=tot_laps {
@@ -213,8 +210,6 @@ impl RacePlot {
 
         // get transformation from x/y to pixels in the window (y axis must be inverted)
         let [x_min, x_max, y_min, y_max] = self.track.get_axes_expansion(50.0);
-
-        // Calculate aspect ratios to preserve geometry
         let track_width = (x_max - x_min).abs() as f32;
         let track_height = (y_max - y_min).abs() as f32;
         let track_aspect = if track_height != 0.0 { track_width / track_height } else { 1.0 };
@@ -223,25 +218,21 @@ impl RacePlot {
         let screen_height = response.rect.height();
         let screen_aspect = screen_width / screen_height;
 
-        let mut dest_rect = response.rect;
-
-        if screen_aspect > track_aspect {
-            // Screen is wider -> fit height
+        let dest_rect = if screen_aspect > track_aspect {
             let new_width = screen_height * track_aspect;
             let offset_x = (screen_width - new_width) / 2.0;
-            dest_rect = egui::Rect::from_min_size(
+            egui::Rect::from_min_size(
                 egui::Pos2::new(response.rect.min.x + offset_x, response.rect.min.y),
                 egui::Vec2::new(new_width, screen_height)
-            );
+            )
         } else {
-            // Screen is taller -> fit width
             let new_height = screen_width / track_aspect;
             let offset_y = (screen_height - new_height) / 2.0;
-            dest_rect = egui::Rect::from_min_size(
+            egui::Rect::from_min_size(
                 egui::Pos2::new(response.rect.min.x, response.rect.min.y + offset_y),
                 egui::Vec2::new(screen_width, new_height)
-            );
-        }
+            )
+        };
 
         let to_screen = egui::emath::RectTransform::from_to(
             egui::emath::Rect::from_min_max(
@@ -259,8 +250,6 @@ impl RacePlot {
 
         // create vector for drawn shapes
         let mut shapes = vec![];
-
-        // TRACK DRAWING ---------------------------------------------------------------------------
         // add track centerline
         let centerline_cl_tmp: Vec<egui::Pos2> =
             self.centerline_cl.iter().map(|p| to_screen * *p).collect();
@@ -417,7 +406,6 @@ impl RacePlot {
 
         // WEATHER OVERLAY ------------------------------------------------------------------------
         if self.racesim_interface.race_state.weather_is_rain {
-            // Draw a simple cloud + raindrops icon in top-right of the drawing area (dest_rect)
             let icon_rect = dest_rect;
             let cloud_center = egui::Pos2::new(icon_rect.max.x - 80.0, icon_rect.min.y + 60.0);
 
@@ -452,7 +440,6 @@ impl RacePlot {
         }
 
         // CARS DRAWING ----------------------------------------------------------------------------
-        // calculate current car coordinates and prepare the GUI car states for drawing
         let tmp_race_progs: Vec<f64> = self
             .racesim_interface
             .race_state
@@ -545,8 +532,6 @@ impl RacePlot {
         //     self.racesim_interface.race_state.flag_state
         // )
         // .unwrap();
-
-        // calculate current UI update duration, append it to the buffer, and set update time
         self.prev_update_durations
             .push(self.prev_update.elapsed().as_millis() as u32);
         self.prev_update = Instant::now();
@@ -572,8 +557,6 @@ impl RacePlot {
             egui::TextStyle::Body,
             egui::Color32::WHITE,
         ));
-
-        // DRAWING ---------------------------------------------------------------------------------
         // update shapes in UI painter and return response
         painter.extend(shapes);
         response

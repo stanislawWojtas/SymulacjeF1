@@ -15,7 +15,6 @@ pub struct DriverPars {
     pub consistency: f64,
     #[serde(default = "default_aggression")]
     pub aggression: f64,
-    // Usunięto t_teamorder
     pub vel_max: f64,
     #[serde(flatten)]
     pub extra: HashMap<String, Value>, // allows legacy tire/degradation fields without using them
@@ -32,24 +31,22 @@ fn default_aggression() -> f64 {
 #[derive(Debug)]
 pub struct Driver {
     pub initials: String,
-    name: String,
+    _name: String,
     pub t_driver: f64,
     pub consistency: f64,
     pub aggression: f64,
-    // Usunięto t_teamorder
-    vel_max: f64,
+    _vel_max: f64,
 }
 
 impl Driver {
     pub fn new(driver_pars: &DriverPars) -> Driver {
         Driver {
             initials: driver_pars.initials.to_owned(),
-            name: driver_pars.name.to_owned(),
+            _name: driver_pars.name.to_owned(),
             t_driver: driver_pars.t_driver,
             consistency: driver_pars.consistency,
             aggression: driver_pars.aggression,
-            // Usunięto t_teamorder
-            vel_max: driver_pars.vel_max,
+            _vel_max: driver_pars.vel_max,
         }
     }
 }

@@ -1,4 +1,4 @@
-use serde::{Deserialize, de};
+use serde::Deserialize;
 
 const MAX_TIRE_PENALTY: f64 = 25.0; // Maksymalna strata: 25 sekund na okrążenie
 
@@ -109,7 +109,6 @@ impl Tireset {
         // Rekomendacje dla Monzy: SOFT ~15 okr., MEDIUM ~28 okr., HARD ~45 okr.
         // Degradacja: SOFT x1.8, MEDIUM x1.0, HARD x0.5
         // Cliff ostrość (k2): SOFT 0.050, MEDIUM 0.020, HARD 0.010
-        // Bazowe offsety: SOFT -1.0s, MEDIUM -0.5s, HARD 0.0s
         let cfg = tire_cfg.for_compound(&self.compound);
         let k1_scale = cfg.k1_scale;
         let default_cliff_age = cfg.default_cliff_age;
@@ -144,7 +143,6 @@ impl Tireset {
                     let cliff_penalty = k_2* over_cliff.powf(1.2);
                     degradation += cliff_penalty.min(MAX_TIRE_PENALTY);
                 }
-                // Dodaj bazowy offset mieszanki również dla modelu nieliniowego
                 base_offset + degradation
             }
         }

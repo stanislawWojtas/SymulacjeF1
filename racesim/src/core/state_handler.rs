@@ -1,5 +1,3 @@
-// Usunięto FlagState, ponieważ interakcje są usunięte
-// use crate::core::race::FlagState; 
 
 #[derive(Debug)]
 pub enum State {
@@ -13,7 +11,6 @@ pub enum State {
 /// Usunięto całą logikę DRS, wyprzedzania, pojedynków i stref.
 #[derive(Debug)]
 pub struct StateHandler {
-    // parametry
     pit_zone: [f64; 2], // [start, end]
     track_length: f64,
     use_drs: bool,
@@ -22,11 +19,8 @@ pub struct StateHandler {
     drs_measurement_points: Vec<f64>,
     overtaking_zones: Vec<[f64; 2]>,
     corners: Vec<[f64; 2]>,
-
-    // zmienne związane z postępem na torze
     s_track_prev: f64,
     s_track_cur: f64,
-    // zmienne związane z maszyną stanów
     state: State,
     t_standstill: f64, // czas postoju
     t_standstill_target: f64, // docelowy czas postoju
@@ -35,7 +29,6 @@ pub struct StateHandler {
     pub drs_act: bool,
     pub duel_act: bool,
     pub corner_act: bool,
-    // zmienne związane z postępem wyścigu
     compl_lap_prev: u32,
     compl_lap_cur: u32,
 }
@@ -54,7 +47,6 @@ impl StateHandler {
         overtaking_zones: Vec<[f64; 2]>,
         corners: Vec<[f64; 2]>,
     ) {
-        // inicjalizacja parametrów
         self.pit_zone = pit_zone;
         self.track_length = track_length;
         self.use_drs = use_drs;
@@ -63,25 +55,16 @@ impl StateHandler {
         self.drs_measurement_points = drs_measurement_points;
         self.overtaking_zones = overtaking_zones;
         self.corners = corners;
-
-        // inicjalizacja zmiennych pozycji s
         self.s_track_prev = s_track_start;
         self.s_track_cur = s_track_start;
-        
-        // Usunięto logikę 'first_zone_info'
     }
 
     pub fn get_s_track_passed_this_step(&self, s_track: f64) -> bool {
-        // Sprawdza, czy bolid minął dany koordynat s w tym kroku czasowym
         let new_lap = self.get_new_lap();
-
-        // Przypadek 1: Normalne przejście bez przekroczenia mety
         // s_prev < s_track <= s_cur (np. 100 < 150 <= 200)
         if !new_lap && self.s_track_prev < s_track && s_track <= self.s_track_cur {
             return true;
         }
-
-        // Przypadek 2: Przejechaliśmy przez metę w tym kroku
         if new_lap {
             // Sprawdź czy punkt był przed metą i minęliśmy go przed metą
             // s_prev < s_track <= track_length (np. 5700 < 5800 <= 5793)
@@ -107,7 +90,6 @@ impl StateHandler {
         delta_t_rear: f64,
         pit_this_lap: bool,
     ) {
-        // Prosta logika pojedynków: jeśli jesteśmy blisko kogoś (z przodu lub z tyłu), to walczymy
         if delta_t_front < 1.0 || delta_t_rear < 1.0 {
             self.duel_act = true;
         } else {
@@ -125,15 +107,12 @@ impl StateHandler {
         }
 
         match self.state {
-            // Bolid jest na torze (łączy Racestart, NormalZone, OvertakingZone)
             State::OnTrack => {
                 if pit_this_lap && self.get_s_track_passed_this_step(self.pit_zone[0]) {
                     self.state = State::Pitlane;
                     self.pit_act = true;
                 }
             }
-
-            // Bolid jest w alei serwisowej
             State::Pitlane => {
                 if self.get_s_track_passed_this_step(self.pit_zone[1]) {
                     // Wyjazd z alei, powrót na tor
@@ -192,8 +171,6 @@ impl StateHandler {
             Some(self.t_standstill + timestep_size - self.t_standstill_target)
         }
     }
-
-    // Usunięto get_act_state_and_zone (już niepotrzebne)
 
     /// get_lap_fracs zwraca ułamki okrążenia (poprzedni i obecny)
     pub fn get_lap_fracs(&self) -> (f64, f64) {
@@ -257,14 +234,9 @@ impl StateHandler {
 
     /// update_race_prog aktualizuje postęp wyścigu
     pub fn update_race_prog(&mut self, cur_laptime: f64, timestep_size: f64) {
-        // update poprzedniego stanu
         self.compl_lap_prev = self.compl_lap_cur;
         self.s_track_prev = self.s_track_cur;
-
-        // update obecnego stanu
         self.s_track_cur += timestep_size / cur_laptime * self.track_length;
-
-        // sprawdza, czy rozpoczęto nowe okrążenie
         if self.s_track_cur >= self.track_length {
             self.compl_lap_cur += 1;
             self.s_track_cur -= self.track_length;

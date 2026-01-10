@@ -1,7 +1,6 @@
 use serde::Deserialize;
 use std::fs::OpenOptions;
 use anyhow::{Context, Result};
-use std::path::Path;
 
 /// * `name` - Track name
 /// * `t_q` - (s) Best qualifying lap time
@@ -84,9 +83,6 @@ pub struct CsvTrackEl {
     pub w_tr_left_m: f64,
     pub w_tr_right_m: f64,
 }
-
-// CALCULATE TRACK MULTIPLIERS ON EACH POINT
-// Fixed: Return Result<Vec<f64>> because Track needs the vector, not just min/max
 pub fn calc_track_multipliers(track_name: &str) -> Result<Vec<f64>> {
 
     let mut trackfile_path = std::path::PathBuf::new();
@@ -113,19 +109,14 @@ pub fn calc_track_multipliers(track_name: &str) -> Result<Vec<f64>> {
 
     let n = csv_track_cl.len();
     if n < 3 {
-        // Return a default vector of 1.0s if track is too short
         return Ok(vec![1.0; n.max(1)]); 
     }
-
-    // Compute distances
     let mut dist: Vec<f64> = vec![0.0; n - 1];
     for i in 0..n - 1 {
         let dx = csv_track_cl[i + 1].x_m - csv_track_cl[i].x_m;
         let dy = csv_track_cl[i + 1].y_m - csv_track_cl[i].y_m;
         dist[i] = (dx * dx + dy * dy).sqrt();
     }
-
-    // Compute curvature approximations
     let mut kappa: Vec<f64> = vec![0.0; n];
     for i in 1..n - 1 {
         let prev_dx = csv_track_cl[i].x_m - csv_track_cl[i - 1].x_m;
@@ -155,18 +146,12 @@ pub fn calc_track_multipliers(track_name: &str) -> Result<Vec<f64>> {
     // Set end curvatures
     kappa[0] = kappa[1];
     kappa[n - 1] = kappa[n - 2];
-
-    // Compute raw multipliers
     let mut raw_multi: Vec<f64> = vec![0.0; n];
     for i in 0..n {
         raw_multi[i] = 1.0 / (1.0 + kappa[i]);
-        // make the raw_multi more sensite to curvature (power of 5)
         raw_multi[i] = raw_multi[i].powf(5.0);
-        // minimum 0.1 multiplier
         raw_multi[i] = raw_multi[i].max(0.5);
     }
-
-    // Normalize multipliers
     let avg_raw: f64 = raw_multi.iter().sum::<f64>() / n as f64;
     let mut multi: Vec<f64> = vec![0.0; n];
     for i in 0..n {
@@ -183,14 +168,11 @@ pub fn calc_track_multipliers(track_name: &str) -> Result<Vec<f64>> {
 
 impl Track {
     pub fn new(track_pars: &TrackPars) -> Track {
-        // determine track distance that is covered by the pit lane when driving through it
         let track_length_pit_zone = if track_pars.pit_zone[0] < track_pars.pit_zone[1] {
             track_pars.pit_zone[1] - track_pars.pit_zone[0]
         } else {
             track_pars.length - track_pars.pit_zone[0] + track_pars.pit_zone[1]
         };
-
-        // calculate overtaking zones lap fraction
         let mut len_overtaking_zones = 0.0;
 
         for overtaking_zone in track_pars.overtaking_zones.iter() {
@@ -202,12 +184,7 @@ impl Track {
         }
 
         let overtaking_zones_lap_frac = len_overtaking_zones / track_pars.length;
-
-        // calculate turn 1 lap fraction
         let turn_1_lap_frac = (track_pars.turn_1 - track_pars.d_first_gridpos) / track_pars.length;
-
-        // Calculate multipliers
-        // We handle the error gracefully by defaulting to an empty vector or 1.0s if file fails
         let multipliers = calc_track_multipliers(track_pars.name.as_str()).unwrap_or_else(|e| {
             eprintln!("Warning: Could not calc multipliers: {}. Defaulting to 1.0", e);
             vec![1.0] 

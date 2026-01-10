@@ -34,17 +34,14 @@ pub enum CarStatus{
 #[derive(Debug, Deserialize, Clone)]
 pub struct CarPars {
     pub car_no: u32,
-    //pub team: String,
-    //pub manufacturer: String,
     pub color: String,
-    pub t_car: f64, // referencyjny czas okrążenia bolidu (bazowy performance)
-    pub b_fuel_per_lap: f64, // zużycie paliwa na okrążenie (fuel/lap)
-    pub m_fuel: f64, // aktualna masa/ilość paliwa (kg)
-    pub t_pit_tirechange: f64, // czas samej wymiany opon w boksie
-    //pub t_pit_driverchange: Option<f64>, // (Opcjonalny) - czas samej zmiany kierowcy w boksie, jeśli bez zmiany to none
-    pub pit_location: f64, // Pozycja pit stopu na torze (metry)
-    pub strategy: Vec<StrategyEntry>, // strategia wyścigu
-    pub p_grid: u32, // pozycja startowa na polach startowych
+    pub t_car: f64,
+    pub b_fuel_per_lap: f64,
+    pub m_fuel: f64,
+    pub t_pit_tirechange: f64,
+    pub pit_location: f64,
+    pub strategy: Vec<StrategyEntry>,
+    pub p_grid: u32,
 }
 
 #[derive(Debug)]
@@ -54,9 +51,9 @@ pub struct Car {
     pub status: CarStatus,
     pub reliability: f64,
     t_car: f64,
-    m_fuel: f64,              
-    b_fuel_per_lap: f64,  
-    t_pit_tirechange: f64,
+    m_fuel: f64,
+    b_fuel_per_lap: f64,
+    _t_pit_tirechange: f64,
     pub pit_location: f64,
     strategy: Vec<StrategyEntry>,
     pub p_grid: u32,
@@ -75,11 +72,11 @@ impl Car {
             car_no: car_pars.car_no,
             color: car_pars.color.to_owned(),
             status: CarStatus::Running,
-            reliability: 0.99, // 1% na awarie silnika
+            reliability: 0.99,
             t_car: car_pars.t_car,
             m_fuel: car_pars.m_fuel,
-            b_fuel_per_lap: car_pars.b_fuel_per_lap, 
-            t_pit_tirechange: car_pars.t_pit_tirechange,
+            b_fuel_per_lap: car_pars.b_fuel_per_lap,
+            _t_pit_tirechange: car_pars.t_pit_tirechange,
             pit_location: car_pars.pit_location,
             strategy: car_pars.strategy.to_owned(),
             p_grid: car_pars.p_grid,
@@ -108,7 +105,6 @@ impl Car {
         let compound_str = compound.as_str();
 
         if is_wet {
-            // Bazowe spowolnienie mokrego toru
             let wet_track_base_penalty = 12.0;
 
             weather_penalty = match compound_str {
@@ -138,14 +134,11 @@ impl Car {
     /// Metoda zwiększa wiek opon.
     /// Usunięto spalanie paliwa.
     pub fn drive_lap(&mut self, lap_time_s: f64, failure_rate_per_hour: f64, print_events: bool) {
-
-        //obsługa awarii
-        if (self.status == CarStatus::DNF){
+        if self.status == CarStatus::DNF {
             return;
         }
         let mut rng = rand::thread_rng();
         if failure_rate_per_hour > 0.0 {
-            // Model Poissona: p_awarii_w_okrazeniu = 1 - exp(-lambda * t_okrazenia)
             // lambda [1/s] = failure_rate_per_hour / 3600
             let lambda = failure_rate_per_hour / 3600.0;
             let p_fail = 1.0 - (-lambda * lap_time_s).exp();
@@ -159,8 +152,6 @@ impl Car {
                 }
             }
         }
-
-        // Spalanie paliwa: zmniejsz masę paliwa o zużycie na okrążenie.
         // (Brak tankowania w wyścigu w F1 – jedynie ubywa paliwa.)
         if self.m_fuel > 0.0 {
             self.m_fuel = (self.m_fuel - self.b_fuel_per_lap).max(0.0);
@@ -190,7 +181,6 @@ impl Car {
     /// Metoda wykonuje pit stop: tylko zmiana opon.
     /// Usunięto tankowanie i zmiany kierowców.
     pub fn perform_pitstop(&mut self, inlap: u32, _drivers_list: &HashMap<String, Rc<Driver>>) {
-        // Reset accumulated damage during pit stop
         self.accumulated_damage_penalty = 0.0;
         
         // get strategy entry (opcjonalnie)
@@ -201,7 +191,6 @@ impl Car {
                     strategy_entry.compound.to_owned(),
                     strategy_entry.tire_start_age,
                 );
-                // Standaryzuj rozpoznawanie slicków do UPPERCASE
                 match self.tireset.compound.to_uppercase().as_str() {
                     "SOFT" | "MEDIUM" | "HARD" => {
                         self.last_slick_compound = Some(self.tireset.compound.to_owned());
@@ -210,11 +199,8 @@ impl Car {
                 }
             }
         } else {
-            // Brak wpisu strategii dla tego okrążenia – pomijamy pit stop.
             // Pozostawiamy bieżący zestaw opon bez zmian.
         }
-        
-        // Tankowanie usunięte – brak modyfikacji m_fuel w pit stopie
 
         
     }
@@ -226,8 +212,6 @@ impl Car {
         let mut rng = rand::thread_rng();
         let pit_time_dist = Normal::new(2.4, 0.4)
             .expect("Pit stop distribution parameters are valid");
-
-        // Czas zmiany opon (tylko jeśli strategia przewiduje zmianę)
         let t_standstill = if let Some(strategy_entry) = strategy_entry_opt {
             if !strategy_entry.compound.is_empty() {
                 let sampled_pit_time: f64 = pit_time_dist.sample(&mut rng);
@@ -236,11 +220,8 @@ impl Car {
                 0.0
             }
         } else {
-            // Brak wpisu strategii – brak postoju
             0.0
         };
-
-        // Tankowanie usunięte – brak dodatkowego czasu za tankowanie
 
         t_standstill
     }

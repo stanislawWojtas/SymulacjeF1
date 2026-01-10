@@ -9,7 +9,6 @@ use std::path::PathBuf;
     about = "A time-discrete race simulator written in Rust"
 )]
 pub struct SimOpts {
-    // FLAGS ---------------------------------------------------------------------------------------
     /// Activate debug printing (only for non-GUI mode)
     #[clap(short, long)]
     pub debug: bool,
@@ -17,8 +16,6 @@ pub struct SimOpts {
     /// Activate GUI - race will be simulated in real-time with visualization
     #[clap(short, long)]
     pub gui: bool,
-
-    // OPTIONS -------------------------------------------------------------------------------------
     /// Set number of simulation runs (only for non-GUI mode, ignored in GUI mode)
     #[clap(short, long, default_value = "1")]
     pub no_sim_runs: u32,
