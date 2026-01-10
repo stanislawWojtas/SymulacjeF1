@@ -190,6 +190,9 @@ impl Car {
     /// Metoda wykonuje pit stop: tylko zmiana opon.
     /// Usunięto tankowanie i zmiany kierowców.
     pub fn perform_pitstop(&mut self, inlap: u32, _drivers_list: &HashMap<String, Rc<Driver>>) {
+        // Reset accumulated damage during pit stop
+        self.accumulated_damage_penalty = 0.0;
+        
         // get strategy entry (opcjonalnie)
         if let Some(strategy_entry) = self.get_strategy_entry(inlap) {
             // handle tire change

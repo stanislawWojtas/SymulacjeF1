@@ -161,7 +161,7 @@ pub fn calc_track_multipliers(track_name: &str) -> Result<Vec<f64>> {
     for i in 0..n {
         raw_multi[i] = 1.0 / (1.0 + kappa[i]);
         // make the raw_multi more sensite to curvature (power of 5)
-        raw_multi[i] = raw_multi[i].powf(100.0);
+        raw_multi[i] = raw_multi[i].powf(5.0);
         // minimum 0.1 multiplier
         raw_multi[i] = raw_multi[i].max(0.5);
     }

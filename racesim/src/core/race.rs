@@ -432,8 +432,25 @@ impl Race {
 
         // update race progress
         for (i, car) in self.cars_list.iter_mut().enumerate() {
+            // Calculate local multiplier for physical slowing in corners (visual only)
+            let effective_movement_pace = if self.track.multipliers.len() > 0 {
+                let s_track = car.sh.get_s_tracks().1;
+                let mult_count = self.track.multipliers.len();
+                let mut idx_m = ((s_track / self.track.length) * mult_count as f64) as usize;
+                if idx_m >= mult_count {
+                    idx_m = mult_count - 1;
+                }
+                let multiplier = self.track.multipliers[idx_m].max(0.1);
+                // Slow down in corners (multiplier < 1.0) for visual realism
+                let adjusted_multiplier = 1.0 - ((1.0 - multiplier) * 1.5).min(0.9);
+                self.cur_laptimes[i] / adjusted_multiplier
+            } else {
+                // No multipliers defined, use average pace
+                self.cur_laptimes[i]
+            };
+
             car.sh
-                .update_race_prog(self.cur_laptimes[i], self.timestep_size)
+                .update_race_prog(effective_movement_pace, self.timestep_size)
         }
 
         // handle pit stop standstill part (uncommon case)
@@ -511,17 +528,17 @@ impl Race {
 
             self.cur_laptimes[i] = self.cur_th_laptimes[i];
 
-            // Lokalna krzywizna toru wpływa na średni czas okrążenia w tym kroku (szybciej na prostych, wolniej w zakrętach)
-            let mult_count = self.track.multipliers.len();
-            if mult_count > 0 {
-                let s_track = car.sh.get_s_tracks().1;
-                let mut idx_m = ((s_track / self.track.length) * mult_count as f64) as usize;
-                if idx_m >= mult_count {
-                    idx_m = mult_count - 1;
-                }
-                let multiplier = self.track.multipliers[idx_m].max(0.1);
-                self.cur_laptimes[i] /= multiplier;
-            }
+            // Multiplier logic removed to fix jagged graphs
+            // let mult_count = self.track.multipliers.len();
+            // if mult_count > 0 {
+            //     let s_track = car.sh.get_s_tracks().1;
+            //     let mut idx_m = ((s_track / self.track.length) * mult_count as f64) as usize;
+            //     if idx_m >= mult_count {
+            //         idx_m = mult_count - 1;
+            //     }
+            //     let multiplier = self.track.multipliers[idx_m].max(0.1);
+            //     self.cur_laptimes[i] /= multiplier;
+            // }
 
 
             // Obsługa Flag (jeśli nie SC)
@@ -602,8 +619,8 @@ impl Race {
                 // B. EFEKT BLOKOWANIA (Blocking / Overtaking)
                 if gap_time < blocking_threshold {
                     // Sprawdzamy czy auto z tyłu jest w ogóle szybsze (potencjalnie)
-                    let time_front = self.cur_laptimes[idx_front];
-                    let time_rear_potential = self.cur_laptimes[idx_rear]; // To jest czas z uwzględnieniem już kary aero
+                    let time_front = self.cur_th_laptimes[idx_front];
+                    let time_rear_potential = self.cur_th_laptimes[idx_rear]; // Teoretyczny czas okrążenia (bez kar za zakręty)
 
                     if time_rear_potential < time_front {
                         // Tył jest szybszy. Czy może wyprzedzić?
@@ -622,8 +639,8 @@ impl Race {
                         if !can_overtake {
                             // BLOKADA! (Pociąg Trullego)
                             // Auto z tyłu musi zwolnić do tempa auta z przodu (plus minimalny dystans)
-                            // Ustawiamy czas okrążenia na czas lidera (nie może pojechać szybciej)
-                            self.cur_laptimes[idx_rear] = time_front; 
+                            // Używamy max() aby uniknąć całkowitego zatrzymania
+                            self.cur_laptimes[idx_rear] = time_front.max(self.cur_laptimes[idx_rear]); 
                             
                             // Opcjonalnie: Dodatkowa frustracja/zużycie opon za jazdę "na zderzaku"
                             self.cars_list[idx_rear].dirty_air_wear_factor += 0.5;
@@ -683,8 +700,8 @@ impl Race {
                 }
 
                 // 2. Nie możemy jechać do tyłu ani stać w miejscu (chyba że korek totalny)
-                if target_speed < 35.0 {
-                    target_speed = 35.0; 
+                if target_speed < 40.0 {
+                    target_speed = 40.0; 
                 }
 
                 // Aplikujemy prędkość (zamiana na czas okrążenia)

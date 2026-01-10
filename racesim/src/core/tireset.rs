@@ -125,7 +125,7 @@ impl Tireset {
                 let linear_degr = (degr_pars.k_1_lin * k1_scale) * age;
                 let cliff_penalty = if age > default_cliff_age {
                     let over = age - default_cliff_age;
-                    (default_k2 * over.powf(2.0)).min(MAX_TIRE_PENALTY)
+                    (default_k2 * over.powf(1.2)).min(MAX_TIRE_PENALTY)
                 } else {
                     0.0
                 };
@@ -141,7 +141,7 @@ impl Tireset {
 
                 if age > cliff_age {
                     let over_cliff = age - cliff_age;
-                    let cliff_penalty = k_2* over_cliff.powf(2.0);
+                    let cliff_penalty = k_2* over_cliff.powf(1.2);
                     degradation += cliff_penalty.min(MAX_TIRE_PENALTY);
                 }
                 // Dodaj bazowy offset mieszanki również dla modelu nieliniowego
