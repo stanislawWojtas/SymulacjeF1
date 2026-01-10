@@ -392,7 +392,13 @@ impl Race {
                 let cur_laptime = self.cur_laptimes[i];
                 if cur_laptime > 0.0 && cur_laptime.is_finite() {
                     let v_avg = self.track.length / cur_laptime;
-                    let visual_speed_factor = 0.3 + 0.9 * multiplier.powf(2.5);
+                    
+                    let visual_speed_factor = if multiplier >= 0.98 {
+                        1.5 * multiplier.powf(1.5)
+                    } else {
+                        multiplier.powf(5.0)
+                    };
+                    
                     let visual_speed = v_avg * visual_speed_factor;
                     self.track.length / visual_speed
                 } else {
@@ -401,7 +407,6 @@ impl Race {
             } else {
                 self.cur_laptimes[i]
             };
-
             car.sh
                 .update_race_prog(effective_movement_pace, self.timestep_size)
         }

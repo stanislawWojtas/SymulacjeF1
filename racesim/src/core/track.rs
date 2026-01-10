@@ -146,20 +146,11 @@ pub fn calc_track_multipliers(track_name: &str) -> Result<Vec<f64>> {
     // Set end curvatures
     kappa[0] = kappa[1];
     kappa[n - 1] = kappa[n - 2];
-    let mut raw_multi: Vec<f64> = vec![0.0; n];
-    for i in 0..n {
-        raw_multi[i] = 1.0 / (1.0 + kappa[i]);
-        raw_multi[i] = raw_multi[i].powf(5.0);
-        raw_multi[i] = raw_multi[i].max(0.5);
-    }
-    let avg_raw: f64 = raw_multi.iter().sum::<f64>() / n as f64;
     let mut multi: Vec<f64> = vec![0.0; n];
     for i in 0..n {
-        multi[i] = if avg_raw != 0.0 {
-            raw_multi[i] / avg_raw
-        } else {
-            1.0
-        };
+        multi[i] = 1.0 / (1.0 + kappa[i]);
+        multi[i] = multi[i].powf(5.0);
+        multi[i] = multi[i].max(0.5);
     }
 
     Ok(multi) // Return the vector

@@ -92,7 +92,27 @@ pub fn handle_race(
                     } else if car.sh.pit_act {
                         race.track.pit_speedlimit
                     } else {
-                        race.track.length / race.cur_laptimes[i]
+                        let cur_laptime = race.cur_laptimes[i];
+                        if cur_laptime > 0.0 && cur_laptime.is_finite() && race.track.multipliers.len() > 0 {
+                            let v_avg = race.track.length / cur_laptime;
+                            let s_track = car.sh.get_s_tracks().1;
+                            let mult_count = race.track.multipliers.len();
+                            let mut idx_m = ((s_track / race.track.length) * mult_count as f64) as usize;
+                            if idx_m >= mult_count {
+                                idx_m = mult_count - 1;
+                            }
+                            let multiplier = race.track.multipliers[idx_m].max(0.1);
+                            
+                            let visual_speed_factor = if multiplier >= 0.98 {
+                                1.5 * multiplier.powf(1.5)
+                            } else {
+                                multiplier.powf(5.0)
+                            };
+                            
+                            v_avg * visual_speed_factor
+                        } else {
+                            race.track.length / cur_laptime
+                        }
                     };
 
                     race_state.car_states.push(CarState {
