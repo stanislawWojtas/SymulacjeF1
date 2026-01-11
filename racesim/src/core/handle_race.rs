@@ -1,4 +1,4 @@
-use crate::core::race::{Race, WeatherState, SimConstants};
+use crate::core::race::{Race, WeatherState, SimConstants, FlagState};
 use crate::core::tireset::TireConfig;
 use crate::interfaces::gui_interface::{CarState, RaceState, RgbColor, MAX_GUI_UPDATE_FREQUENCY};
 use crate::post::race_result::RaceResult;
@@ -91,6 +91,9 @@ pub fn handle_race(
                         0.0
                     } else if car.sh.pit_act {
                         race.track.pit_speedlimit
+                    } else if matches!(race.flag_state, FlagState::Sc) {
+                        // SC Mode: Display average speed (no visual scaling to match movement logic)
+                        race.track.length / race.cur_laptimes[i]
                     } else {
                         let cur_laptime = race.cur_laptimes[i];
                         if cur_laptime > 0.0 && cur_laptime.is_finite() && race.track.multipliers.len() > 0 {
@@ -103,11 +106,8 @@ pub fn handle_race(
                             }
                             let multiplier = race.track.multipliers[idx_m].max(0.1);
                             
-                            let visual_speed_factor = if multiplier >= 0.98 {
-                                1.5 * multiplier.powf(1.5)
-                            } else {
-                                multiplier.powf(5.0)
-                            };
+                            // Smoother formula: 35% base speed + scaled boost (matches race.rs)
+                            let visual_speed_factor = 0.35 + (1.15 * multiplier.powf(2.0));
                             
                             v_avg * visual_speed_factor
                         } else {

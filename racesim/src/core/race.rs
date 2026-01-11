@@ -380,7 +380,11 @@ impl Race {
         self.calc_cur_laptimes();
         self.handle_state_transitions();
         for (i, car) in self.cars_list.iter_mut().enumerate() {
-            let effective_movement_pace = if self.track.multipliers.len() > 0 {
+            let effective_movement_pace = if matches!(self.flag_state, FlagState::Sc) {
+                // SC Mode: No visual tricks, strictly follow queue speed to prevent illegal overtaking
+                self.cur_laptimes[i]
+            } else if self.track.multipliers.len() > 0 {
+                // Race Mode: Apply visual scaling based on track position
                 let s_track = car.sh.get_s_tracks().1;
                 let mult_count = self.track.multipliers.len();
                 let mut idx_m = ((s_track / self.track.length) * mult_count as f64) as usize;
@@ -393,11 +397,8 @@ impl Race {
                 if cur_laptime > 0.0 && cur_laptime.is_finite() {
                     let v_avg = self.track.length / cur_laptime;
                     
-                    let visual_speed_factor = if multiplier >= 0.98 {
-                        1.5 * multiplier.powf(1.5)
-                    } else {
-                        multiplier.powf(5.0)
-                    };
+                    // Smoother formula: 35% base speed + scaled boost (avoids extreme slowdown)
+                    let visual_speed_factor = 0.35 + (1.15 * multiplier.powf(2.0));
                     
                     let visual_speed = v_avg * visual_speed_factor;
                     self.track.length / visual_speed
