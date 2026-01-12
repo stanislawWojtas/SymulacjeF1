@@ -501,6 +501,16 @@ impl Race {
             0.0
         };
 
+
+        for car in self.cars_list.iter_mut() {
+            if car.status == CarStatus::DNF {
+                continue;
+            }
+            // Zanikanie dirty air wear factor
+            // car.dirty_air_wear_factor = (car.dirty_air_wear_factor - (car.dirty_air_wear_factor * 0.2).max(0.1)).max(1.0);
+            car.dirty_air_wear_factor = (car.dirty_air_wear_factor * 0.75).max(1.0);
+        }
+
         // --- CZĘŚĆ 1: PODSTAWOWE OBLICZENIA (FIZYKA + PIT STOPY) ---
         // (SC Logic wyrzucone stąd do osobnego bloku niżej, żeby obsłużyć kolejkowanie)
         for (i, car) in self.cars_list.iter().enumerate() {
@@ -508,9 +518,7 @@ impl Race {
                 self.cur_laptimes[i] = f64::INFINITY;
                 continue;
             }
-
             self.cur_laptimes[i] = self.cur_th_laptimes[i];
-
             // Lokalna krzywizna toru wpływa na średni czas okrążenia w tym kroku (szybciej na prostych, wolniej w zakrętach)
             let mult_count = self.track.multipliers.len();
             if mult_count > 0 {

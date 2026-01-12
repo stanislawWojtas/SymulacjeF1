@@ -1,0 +1,94 @@
+{
+  "race_pars": {
+    "season": 2024,
+    "tot_no_laps": 53,
+    "track_name": "Monza",
+    "initial_weather": "Dry",
+    "rain_probability": 0.0,
+    "drs_allowed_lap": 1,
+    "use_drs": true,
+    "participants": [1,2,3]
+  },
+  "driver_pars_all": {
+    "D1": {
+      "initials": "D1",
+      "name": "Test Driver 1",
+      "t_driver": 0.2,
+      "aggression": 0.50,
+      "vel_max": 330.0,
+      "degr_pars_all": {
+        "SOFT": { "degr_model": "lin", "k_0": 0.0, "k_1_lin": 0.1 },
+        "MEDIUM": { "degr_model": "lin", "k_0": 0.2, "k_1_lin": 0.06 },
+        "HARD": { "degr_model": "lin", "k_0": 0.4, "k_1_lin": 0.03 }
+      }
+    },
+    "D2": {
+      "initials": "D2",
+      "name": "Test Driver 2",
+      "t_driver": 0.2,
+      "aggression": 0.50,
+      "vel_max": 330.0,
+      "degr_pars_all": {
+        "SOFT": { "degr_model": "lin", "k_0": 0.0, "k_1_lin": 0.1 },
+        "MEDIUM": { "degr_model": "lin", "k_0": 0.2, "k_1_lin": 0.06 },
+        "HARD": { "degr_model": "lin", "k_0": 0.4, "k_1_lin": 0.03 }
+      }
+    },
+    "D3": {
+      "initials": "D3",
+      "name": "Test Driver 3",
+      "t_driver": 0.2,
+      "aggression": 0.50,
+      "vel_max": 330.0,
+      "degr_pars_all": {
+        "SOFT": { "degr_model": "lin", "k_0": 0.0, "k_1_lin": 0.1 },
+        "MEDIUM": { "degr_model": "lin", "k_0": 0.2, "k_1_lin": 0.06 },
+        "HARD": { "degr_model": "lin", "k_0": 0.4, "k_1_lin": 0.03 }
+      }
+    }
+  },
+  "car_pars_all": {
+    "1": {
+      "car_no": 1,
+      "color": "#FF5555",
+      "t_car": 0.2,
+      "m_fuel": 32.0,
+      "b_fuel_per_lap": 1.5,
+      "t_pit_tirechange": 2.5,
+      "pit_location": 50.0,
+      "strategy": [
+        { "inlap": 0, "tire_start_age": 0, "compound": "MEDIUM", "driver_initials": "D1" },
+        { "inlap": 33, "tire_start_age": 0, "compound": "HARD", "driver_initials": "D1" }
+      ],
+      "p_grid": 3
+    },
+    "2": {
+      "car_no": 2,
+      "color": "#FF5555",
+      "t_car": 0.2,
+      "m_fuel": 32.0,
+      "b_fuel_per_lap": 1.5,
+      "t_pit_tirechange": 2.5,
+      "pit_location": 50.0,
+      "strategy": [
+        { "inlap": 0, "tire_start_age": 0, "compound": "MEDIUM", "driver_initials": "D2" },
+        { "inlap": 20, "tire_start_age": 0, "compound": "HARD", "driver_initials": "D2" }
+      ],
+      "p_grid": 2
+    },
+    "3": {
+      "car_no": 3,
+      "color": "#FF5555",
+      "t_car": 0.2,
+      "m_fuel": 32.0,
+      "b_fuel_per_lap": 1.5,
+      "t_pit_tirechange": 2.5,
+      "pit_location": 50.0,
+      "strategy": [
+        { "inlap": 0, "tire_start_age": 0, "compound": "MEDIUM", "driver_initials": "D3" },
+        { "inlap": 26, "tire_start_age": 0, "compound": "HARD", "driver_initials": "D3" }
+      ],
+      "p_grid": 1
+    }
+  }
+}

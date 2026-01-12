@@ -83,7 +83,7 @@ impl Tireset {
 
     /// drive_lap zwiększa wiek opon o jedno okrążenie.
     pub fn drive_lap(&mut self, wear_factor: f64) {
-        self.age_cur_stint += 1.0 * wear_factor;
+        self.age_cur_stint += 1.2 * wear_factor;
         self.age_tot += 1.0 * wear_factor;
     }
 

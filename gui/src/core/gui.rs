@@ -530,7 +530,15 @@ impl RacePlot {
             .map(|car_state| car_state.race_prog)
             .collect();
         let cur_lap_leader = max(&race_progs).trunc() as u32 + 1;
-        let mut gen_info_text = format!("Lap: {}/{}\n", cur_lap_leader, self.race_info.tot_no_laps);
+        // let mut gen_info_text = format!("Lap: {}/{}\n", cur_lap_leader, self.race_info.tot_no_laps);
+        let mut gen_info_text = format!(
+            "Lap: {}/{}\nFlag: {:?}\nSC active: {}",
+            cur_lap_leader,
+            self.race_info.tot_no_laps,
+            self.racesim_interface.race_state.flag_state,
+            self.racesim_interface.race_state.sc_active,
+        );
+
 
         // Add velocities
         gen_info_text.push_str("\nVelocities:\n");
